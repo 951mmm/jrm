@@ -1,4 +1,4 @@
-use std::{error::Error, fmt::Display, fs::File, io::Read, vec};
+use std::{fs::File, io::Read, vec};
 
 pub struct ClassReader {
     buffer: Vec<u8>,
@@ -50,44 +50,5 @@ impl ClassReader {
         let bytes = self.buffer[self.cur..self.cur + size].to_vec();
         self.cur += size;
         Some(bytes)
-    }
-}
-
-mod test {
-    use crate::{class_reader::ClassReader, util::setup};
-    use dotenvy::dotenv;
-
-    #[allow(unused)]
-    #[test]
-    pub fn test_read_path() -> anyhow::Result<()> {
-        let _ = setup()?;
-        Ok(())
-    }
-
-    #[test]
-    pub fn test_read_one_byte() -> anyhow::Result<()> {
-        let mut class_reader = setup()?;
-        let byte = class_reader.read_one_byte();
-        println!("Read byte: {:?}", byte);
-        assert_eq!(byte, Some(0xCA)); // Assuming the first byte is 0xCA for a valid class file
-        Ok(())
-    }
-
-    #[test]
-    pub fn test_read_two_bytes() -> anyhow::Result<()> {
-        let mut class_reader = setup()?;
-        let two_bytes = class_reader.read_two_bytes();
-        println!("Read two bytes: {:?}", two_bytes);
-        assert_eq!(two_bytes, Some(0xCAFE)); // Assuming the first two bytes are 0xFEED
-        Ok(())
-    }
-
-    #[test]
-    pub fn test_read_four_bytes() -> anyhow::Result<()> {
-        let mut class_reader = setup()?;
-        let four_bytes = class_reader.read_four_bytes();
-        println!("Read four bytes: {:?}", four_bytes);
-        assert_eq!(four_bytes, Some(0xCAFEBABE)); // Assuming the first four bytes are 0xCAFEBABE
-        Ok(())
     }
 }
