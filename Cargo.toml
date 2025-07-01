@@ -1,0 +1,12 @@
+[workspace]
+resolver = "2"
+members = ["crates/jrm", "crates/jrm-macro"]
+
+[workspace.dependencies]
+anyhow = "1.0.98"
+dotenvy = "0.15.7"
+
+syn = "2.0.104"
+convert_case = "0.8.0"
+proc-macro2 = "1.0.95"
+quote = "1.0.40"
