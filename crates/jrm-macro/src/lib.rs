@@ -8,7 +8,7 @@ use syn::{DeriveInput, Ident, Item, Type, parse_macro_input, parse_quote};
 use crate::class_parser::class_file_parse_derive_inner;
 use crate::klass_debug::klass_debug_derive_inner;
 #[proc_macro]
-pub fn generate_u_parse(_: TokenStream) -> TokenStream {
+pub fn generate_ux(_: TokenStream) -> TokenStream {
     let parse_expr: Vec<(Ident, Type)> = vec![
         (parse_quote!(read_one_byte), parse_quote!(u8)),
         (parse_quote!(read_two_bytes), parse_quote!(u16)),
@@ -17,8 +17,17 @@ pub fn generate_u_parse(_: TokenStream) -> TokenStream {
     let parse_stmts = parse_expr.iter().map(|(call, ty)| {
         quote! {
             impl ClassParser for #ty {
-                fn parse(class_reader: &mut ClassReader) -> anyhow::Result<Self> {
+                fn parse(class_reader: &mut ClassReader, _: &mut ParserContext) -> anyhow::Result<Self> {
                     Ok(class_reader.#call().unwrap_or(0))
+                }
+            }
+        }
+    });
+    let from_stmts = parse_expr.iter().map(|(_, ty)| {
+        quote! {
+            impl std::convert::From<#ty> for StoreType {
+                fn from(value: #ty) -> StoreType {
+                    StoreType::Usize(value as usize)
                 }
             }
         }
@@ -26,6 +35,7 @@ pub fn generate_u_parse(_: TokenStream) -> TokenStream {
 
     quote! {
         #(#parse_stmts)*
+        #(#from_stmts)*
     }
     .into()
 }
@@ -45,17 +55,7 @@ pub fn klass_debug_derive(input: TokenStream) -> TokenStream {
     unwrap_err!(klass_debug_derive_inner(&ast))
 }
 
-#[proc_macro_derive(
-    ClassParser,
-    attributes(
-        not_zero,
-        with_lookup,
-        impl_sized,
-        lookup_outer,
-        sized_wrapper,
-        constant_pool
-    )
-)]
+#[proc_macro_derive(ClassParser, attributes(impl_sized, set_ctx, get_ctx, constant_pool))]
 pub fn class_file_parse_derive(input: TokenStream) -> TokenStream {
     let ast = parse_macro_input!(input as Item);
     unwrap_err!(class_file_parse_derive_inner(&ast))

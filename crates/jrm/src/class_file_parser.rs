@@ -1,23 +1,44 @@
-use std::fmt::Debug;
+use std::{collections::HashMap, fmt::Debug};
 
-use jrm_macro::{ClassParser, KlassDebug, generate_u_parse};
+use jrm_macro::{ClassParser, KlassDebug, generate_ux};
 
 use crate::{attribute::Attribute, class_reader::ClassReader, constant_pool::ConstantPool};
 
+#[derive(Clone, Debug)]
+pub enum StoreType {
+    Usize(usize),
+    ConstantPool(ConstantPool),
+}
+impl From<usize> for StoreType {
+    fn from(value: usize) -> Self {
+        StoreType::Usize(value)
+    }
+}
+
+impl From<ConstantPool> for StoreType {
+    fn from(value: ConstantPool) -> Self {
+        StoreType::ConstantPool(value)
+    }
+}
+pub struct ParserContext {
+    pub store: HashMap<String, StoreType>,
+}
+
+impl ParserContext {
+    pub fn new() -> Self {
+        let store = HashMap::new();
+        Self { store }
+    }
+}
 pub trait ClassParser {
-    fn parse(class_reader: &mut ClassReader) -> anyhow::Result<Self>
+    fn parse(class_reader: &mut ClassReader, ctx: &mut ParserContext) -> anyhow::Result<Self>
     where
         Self: Sized;
 }
 
-pub trait ClassLookUpParser {
-    fn parse(class_reader: &mut ClassReader, prev: usize) -> anyhow::Result<Self>
-    where
-        Self: Sized;
-}
-generate_u_parse! {}
+generate_ux! {}
 impl ClassParser for i32 {
-    fn parse(class_reader: &mut ClassReader) -> anyhow::Result<Self>
+    fn parse(class_reader: &mut ClassReader, _: &mut ParserContext) -> anyhow::Result<Self>
     where
         Self: Sized,
     {
@@ -26,7 +47,7 @@ impl ClassParser for i32 {
     }
 }
 impl ClassParser for f32 {
-    fn parse(class_reader: &mut ClassReader) -> anyhow::Result<Self>
+    fn parse(class_reader: &mut ClassReader, _: &mut ParserContext) -> anyhow::Result<Self>
     where
         Self: Sized,
     {
@@ -35,7 +56,7 @@ impl ClassParser for f32 {
     }
 }
 impl ClassParser for i64 {
-    fn parse(class_reader: &mut ClassReader) -> anyhow::Result<Self>
+    fn parse(class_reader: &mut ClassReader, _: &mut ParserContext) -> anyhow::Result<Self>
     where
         Self: Sized,
     {
@@ -46,7 +67,7 @@ impl ClassParser for i64 {
     }
 }
 impl ClassParser for f64 {
-    fn parse(class_reader: &mut ClassReader) -> anyhow::Result<Self>
+    fn parse(class_reader: &mut ClassReader, _: &mut ParserContext) -> anyhow::Result<Self>
     where
         Self: Sized,
     {
@@ -56,14 +77,6 @@ impl ClassParser for f64 {
         Ok(f64::from_bits(num))
     }
 }
-impl ClassLookUpParser for Vec<u8> {
-    fn parse(class_reader: &mut ClassReader, prev: usize) -> anyhow::Result<Self>
-    where
-        Self: Sized,
-    {
-        Ok(class_reader.read_bydes(prev).unwrap_or_default())
-    }
-}
 
 #[derive(KlassDebug, ClassParser)]
 pub struct InstanceKlass {
@@ -71,24 +84,24 @@ pub struct InstanceKlass {
     magic: u32,
     minor_version: u16,
     major_version: u16,
+    #[set_ctx]
     constant_pool_count: u16,
-    #[with_lookup(constant_pool_count)]
     constant_pool: ConstantPool,
     #[hex]
     access_flags: u16,
     this_class: u16,
     super_class: u16,
+    #[set_ctx]
     interfaces_count: u16,
-    #[with_lookup(interfaces_count)]
-    #[impl_sized]
+    #[impl_sized(constant_pool_count)]
     interfaces: Vec<u16>,
+    #[set_ctx]
     fields_count: u16,
-    #[with_lookup(fields_count)]
-    #[impl_sized]
+    #[impl_sized(fields_count)]
     fields: Vec<Field>,
+    #[set_ctx]
     methods_count: u16,
-    #[with_lookup(methods_count)]
-    #[impl_sized]
+    #[impl_sized(methods_count)]
     methods: Vec<Method>,
     // attributes_count: u16,
     // attributes: Vec<AttributeInfo>,
@@ -105,8 +118,8 @@ pub struct Property {
     access_flags: u16,
     name_index: u16,
     descriptor_index: u16,
+    #[set_ctx]
     attributes_count: u16,
-    #[with_lookup(attributes_count)]
-    #[impl_sized]
+    #[impl_sized(attributes_count)]
     attributes: Vec<Attribute>,
 }

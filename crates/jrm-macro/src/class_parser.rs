@@ -1,3 +1,4 @@
+
 use proc_macro2::Literal;
 use quote::{format_ident, quote};
 use syn::{
@@ -16,15 +17,10 @@ pub fn class_file_parse_derive_inner(ast: &Item) -> syn::Result<proc_macro2::Tok
 }
 
 fn resolve_struct(item_struct: &ItemStruct) -> syn::Result<proc_macro2::TokenStream> {
-    let ItemStruct {
-        fields,
-        ident,
-        attrs,
-        ..
-    } = item_struct;
+    let ItemStruct { fields, ident, .. } = item_struct;
     let result = match fields {
         Fields::Named(fields_named) => resolve_named(fields_named, ident)?,
-        Fields::Unnamed(fields_unnamed) => resolve_unnamed(fields_unnamed, ident, attrs)?,
+        Fields::Unnamed(fields_unnamed) => resolve_unnamed(fields_unnamed, ident)?,
         _ => unreachable!(),
     };
     Ok(result)
@@ -32,10 +28,14 @@ fn resolve_struct(item_struct: &ItemStruct) -> syn::Result<proc_macro2::TokenStr
 
 fn resolve_enum(item_enum: &ItemEnum) -> syn::Result<proc_macro2::TokenStream> {
     let ItemEnum {
-        variants, ident, ..
+        variants,
+        ident,
+        attrs,
+        ..
     } = item_enum;
     let mut arm_expr = vec![];
     let mut cur_discr = 0;
+    let ctx_ident = attr_get_ctx(attrs)?;
     for variant in variants {
         let variant_ident = &variant.ident;
         let fields = &variant.fields;
@@ -52,6 +52,7 @@ fn resolve_enum(item_enum: &ItemEnum) -> syn::Result<proc_macro2::TokenStream> {
                 val
             }
         };
+        let discr_val_lit = Lit::new(Literal::i32_unsuffixed(discr_val));
 
         let mut temp_idents = vec![];
         let mut parse_stmts = vec![];
@@ -60,13 +61,11 @@ fn resolve_enum(item_enum: &ItemEnum) -> syn::Result<proc_macro2::TokenStream> {
 
             let temp_ident = format_ident!("temp_{}", index);
             let stmt = quote! {
-                let #temp_ident = <#field_ty as ClassParser>::parse(class_reader)?;
+                let #temp_ident = <#field_ty as ClassParser>::parse(class_reader, ctx)?;
             };
             temp_idents.push(temp_ident);
             parse_stmts.push(stmt);
         }
-
-        let discr_val_lit = Lit::new(Literal::i32_unsuffixed(discr_val));
 
         let expr = if fields.is_empty() {
             quote! {
@@ -84,19 +83,29 @@ fn resolve_enum(item_enum: &ItemEnum) -> syn::Result<proc_macro2::TokenStream> {
         };
         arm_expr.push(expr);
     }
-    Ok(quote! {
-        impl ClassLookUpParser for #ident {
-            fn parse(class_reader: &mut ClassReader, prev: usize) -> anyhow::Result<Self> {
-                let result = match prev {
-                    #(#arm_expr)*
-                    _ => {
-                        unreachable!()
+
+    let result = if let Some(ctx_ident) = ctx_ident {
+        let key = get_ident_string_lit(&ctx_ident);
+        quote! {
+            impl ClassParser for #ident {
+                fn parse(class_reader: &mut ClassReader, ctx: &mut ParserContext) -> anyhow::Result<Self> {
+                    if let Some(StoreType::Usize(choice)) = ctx.store.get(#key).cloned() {
+                        let result = match choice {
+                            #(#arm_expr)*
+                            _ => {
+                                unreachable!()
+                            }
+                        };
+                        return Ok(result);
                     }
-                };
-                Ok(result)
+                    anyhow::bail!("failed to get choice ({}) from ctx", #key)
+                }
             }
         }
-    })
+    } else {
+        unreachable!()
+    };
+    Ok(result)
 }
 
 fn resolve_named(
@@ -111,36 +120,29 @@ fn resolve_named(
         let field_ident = &field.ident;
         let field_ty = &field.ty;
 
-        let is_not_zero = attr_not_zero(field);
-        let is_impl_sized = attr_impl_sized(field);
-        let lookup_ident = attr_with_lookup(field)?;
+        let size_ident = attr_impl_sized(field)?;
+        let is_set_ctx = attr_set_ctx(field);
 
-        let stmt = if let Some(lookup_ident) = lookup_ident {
-            quote! {
-                let #field_ident = <#field_ty as ClassLookUpParser>::parse(class_reader, #lookup_ident as usize)?;
-            }
-        } else if is_not_zero {
-            quote! {
-                let #field_ident = <#field_ty as ClassParser>::parse(class_reader)?;
-                if #field_ident == 0 {
-                    return anyhow::bail!("invalid {}", stringify!(#field_ty));
-                }
-            }
-        } else {
-            quote! {
-                let #field_ident = <#field_ty as ClassParser>::parse(class_reader)?;
-            }
+        let stmt = quote! {
+            let #field_ident = <#field_ty as ClassParser>::parse(class_reader, ctx)?;
         };
 
-        if is_impl_sized {
-            collection_impl_blocks.push(resolve_collection_impl(field_ty, false)?);
+        if let Some(size_ident) = size_ident {
+            collection_impl_blocks.push(resolve_collection_impl(field_ty, &size_ident, false)?);
         }
         parse_stmts.push(stmt);
+        if is_set_ctx {
+            let key: String = field_ident.as_ref().unwrap().to_string();
+            parse_stmts.push(quote! {
+                ctx.store.insert(#key.to_owned(), #field_ident.into());
+            });
+        }
         field_idents.push(field_ident);
     }
+
     Ok(quote! {
         impl ClassParser for #struct_ident {
-            fn parse(class_reader: &mut ClassReader) -> anyhow::Result<Self> {
+            fn parse(class_reader: &mut ClassReader, ctx: &mut ParserContext) -> anyhow::Result<Self> {
                 #(#parse_stmts)*
                 Ok(Self {
                     #(#field_idents,)*
@@ -154,136 +156,116 @@ fn resolve_named(
 fn resolve_unnamed(
     fields_unnamed: &FieldsUnnamed,
     struct_ident: &Ident,
-    struct_attrs: &Vec<Attribute>,
 ) -> syn::Result<proc_macro2::TokenStream> {
     let mut temp_idents = vec![];
     let mut parse_stmts = vec![];
     let mut collection_impl_block = None;
-    let is_sized_wrapper = attr_sized_wrapper(struct_attrs);
 
     for (index, field) in (&fields_unnamed.unnamed).into_iter().enumerate() {
         let field_ty = &field.ty;
         let temp_ident = format_ident!("temp_{}", index);
 
-        let is_not_zero = attr_not_zero(field);
-        let is_lookup_outer = attr_lookup_outer(field);
-        let is_impl_sized = attr_impl_sized(field);
+        let size_ident = attr_impl_sized(field)?;
         let is_constant_pool = attr_constant_pool(field);
-        let stmt = if is_not_zero {
-            quote! {
-                let #temp_ident = <#field_ty as ClassParser>::parse(class_reader)?;
-                if #temp_ident == 0 {
-                    return anyhow::bail!("invalid {}", stringify!(#field_ty));
-                }
-            }
-        } else if is_lookup_outer {
-            quote! {
-                let #temp_ident = <#field_ty as ClassLookUpParser>::parse(class_reader, prev)?;
-            }
-        } else {
-            quote! {
-                let #temp_ident = <#field_ty as ClassParser>::parse(class_reader)?;
-            }
+        let stmt = quote! {
+            let #temp_ident = <#field_ty as ClassParser>::parse(class_reader, ctx)?;
         };
 
-        if is_impl_sized {
-            collection_impl_block = Some(resolve_collection_impl(field_ty, is_constant_pool)?);
+        if let Some(size_ident) = size_ident {
+            collection_impl_block = Some(resolve_collection_impl(
+                field_ty,
+                &size_ident,
+                is_constant_pool,
+            )?);
         }
         temp_idents.push(temp_ident);
         parse_stmts.push(stmt);
     }
-    let result = if is_sized_wrapper {
-        quote! {
-            impl ClassLookUpParser for #struct_ident {
-                fn parse(class_reader: &mut ClassReader, prev: usize) -> anyhow::Result<Self> {
-                    #(#parse_stmts)*
-                    Ok(#struct_ident(#(#temp_idents),*))
-                }
+    let result = quote! {
+        impl ClassParser for #struct_ident {
+            fn parse(class_reader: &mut ClassReader, ctx: &mut ParserContext) -> anyhow::Result<Self> {
+                #(#parse_stmts)*
+                Ok(#struct_ident(#(#temp_idents),*))
             }
-            #collection_impl_block
         }
-    } else {
-        quote! {
-            impl ClassParser for #struct_ident {
-                fn parse(class_reader: &mut ClassReader) -> anyhow::Result<Self> {
-                    #(#parse_stmts)*
-                    Ok(#struct_ident(#(#temp_idents),*))
-                }
-            }
-            #collection_impl_block
-        }
+        #collection_impl_block
     };
     Ok(result)
 }
 
-fn attr_not_zero(field: &Field) -> bool {
-    field
-        .attrs
-        .iter()
-        .any(|attr| attr.path().is_ident("not_zero"))
+macro_rules! simple_attr {
+    ($field: ident, $name: literal) => {
+        $field.attrs.iter().any(|attr| attr.path().is_ident($name))
+    };
 }
-fn attr_impl_sized(field: &Field) -> bool {
-    field
-        .attrs
-        .iter()
-        .any(|attr| attr.path().is_ident("impl_sized"))
+// fn attr_not_zero(field: &Field) -> bool {
+//     simple_attr!(field, "not_zero")
+// }
+
+macro_rules! paren_attr {
+    ($field: ident, $name: literal, $ty: ty) => {
+        for attr in &$field.attrs {
+            if attr.path().is_ident($name) {
+                return Ok(Some(attr.parse_args::<$ty>()?));
+            }
+        }
+    };
 }
-fn attr_with_lookup(field: &Field) -> syn::Result<Option<Ident>> {
-    for attr in &field.attrs {
-        if attr.path().is_ident("with_lookup") {
+fn attr_impl_sized(field: &Field) -> syn::Result<Option<Ident>> {
+    paren_attr!(field, "impl_sized", Ident);
+    Ok(None)
+}
+fn attr_set_ctx(field: &Field) -> bool {
+    simple_attr!(field, "set_ctx")
+}
+fn attr_constant_pool(field: &Field) -> bool {
+    simple_attr!(field, "constant_pool")
+}
+fn attr_get_ctx(attrs: &Vec<Attribute>) -> syn::Result<Option<Ident>> {
+    for attr in attrs {
+        if attr.path().is_ident("get_ctx") {
             return Ok(Some(attr.parse_args::<Ident>()?));
         }
     }
     Ok(None)
 }
-fn attr_lookup_outer(field: &Field) -> bool {
-    field
-        .attrs
-        .iter()
-        .any(|attr| attr.path().is_ident("lookup_outer"))
-}
-fn attr_sized_wrapper(attrs: &Vec<Attribute>) -> bool {
-    attrs
-        .iter()
-        .any(|attr| attr.path().is_ident("sized_wrapper"))
-}
-fn attr_constant_pool(field: &Field) -> bool {
-    field
-        .attrs
-        .iter()
-        .any(|attr| attr.path().is_ident("constant_pool"))
-}
 fn resolve_collection_impl(
     collection_ty: &Type,
+    size_ident: &Ident,
     is_constant_pool: bool,
 ) -> syn::Result<proc_macro2::TokenStream> {
     let collection_ident = get_collection_ident(collection_ty)?;
     let inner_ty = get_inner_ty(collection_ty)?;
+    let size_ident_string_lit = get_ident_string_lit(size_ident);
     let stmts = if is_constant_pool {
         quote! {
-            let mut collection = #collection_ident::with_capacity(prev);
+            let mut collection = #collection_ident::with_capacity(size);
             let invalid = ConstantWrapper { tag: 0, constant: Constant::Invalid };
             collection.push(invalid);
-            for _ in 0..prev-1 {
-                let item = <#inner_ty as ClassParser>::parse(class_reader)?;
+            for _ in 0..size-1 {
+                let item = <#inner_ty as ClassParser>::parse(class_reader, ctx)?;
                 collection.push(item);
             }
-            Ok(collection)
+            return Ok(collection);
+
         }
     } else {
         quote! {
-            let mut collection = #collection_ident::with_capacity(prev);
-            for _ in 0..prev {
-                let item = <#inner_ty as ClassParser>::parse(class_reader)?;
+            let mut collection = #collection_ident::with_capacity(size);
+            for _ in 0..size {
+                let item = <#inner_ty as ClassParser>::parse(class_reader, ctx)?;
                 collection.push(item);
             }
-            Ok(collection)
+            return Ok(collection);
         }
     };
     Ok(quote! {
-        impl ClassLookUpParser for #collection_ty {
-            fn parse(class_reader: &mut ClassReader, prev: usize) -> anyhow::Result<Self> {
-                #stmts
+        impl ClassParser for #collection_ty {
+            fn parse(class_reader: &mut ClassReader, ctx: &mut ParserContext) -> anyhow::Result<Self> {
+                if let Some(StoreType::Usize(size)) = ctx.store.get(#size_ident_string_lit).cloned() {
+                    #stmts
+                }
+                anyhow::bail!("failed to get size ({}) from ctx", #size_ident_string_lit)
             }
         }
     })
@@ -309,4 +291,9 @@ fn get_inner_ty(ty: &Type) -> syn::Result<&Type> {
         }
     }
     Err(syn::Error::new_spanned(ty, "Invalid inner type for Vec"))
+}
+fn get_ident_string_lit(ident: &Ident) -> Lit {
+    let ident_string = ident.to_string();
+    
+    Lit::new(Literal::string(&ident_string))
 }

@@ -1,16 +1,10 @@
 use std::fmt::Debug;
 
-use crate::class_file_parser::{ClassLookUpParser, ClassParser};
+use crate::class_file_parser::{ClassParser, ParserContext, StoreType};
 use crate::class_reader::ClassReader;
 use jrm_macro::ClassParser;
-#[derive(ClassParser)]
-#[sized_wrapper]
-pub struct ConstantPool(
-    #[lookup_outer]
-    #[impl_sized]
-    #[constant_pool]
-    pub Vec<ConstantWrapper>,
-);
+#[derive(Clone, ClassParser)]
+pub struct ConstantPool(#[impl_sized(constant_pool_count)] pub Vec<ConstantWrapper>);
 impl Debug for ConstantPool {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         writeln!(f)?;
@@ -24,15 +18,16 @@ impl Debug for ConstantPool {
     }
 }
 
-#[derive(Debug, ClassParser)]
+#[derive(Clone, Debug, ClassParser)]
 pub struct ConstantWrapper {
+    #[set_ctx]
     pub tag: u8,
-    #[with_lookup(tag)]
     pub constant: Constant,
 }
 
-#[derive(Debug, ClassParser)]
+#[derive(Clone, Debug, ClassParser)]
 #[repr(u8)]
+#[get_ctx(tag)]
 pub enum Constant {
     Utf8(ConstantUtf8) = 1,
     Integer(i32) = 3,
@@ -54,10 +49,11 @@ pub enum Constant {
     Invalid = 0,
 }
 
-#[derive(ClassParser)]
+#[derive(Clone, ClassParser)]
 pub struct ConstantUtf8 {
+    #[set_ctx]
     pub length: u16,
-    #[with_lookup(length)]
+    #[impl_sized(length)]
     pub bytes: Vec<u8>,
 }
 
