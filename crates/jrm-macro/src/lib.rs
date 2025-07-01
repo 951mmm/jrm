@@ -23,19 +23,9 @@ pub fn generate_ux(_: TokenStream) -> TokenStream {
             }
         }
     });
-    let from_stmts = parse_expr.iter().map(|(_, ty)| {
-        quote! {
-            impl std::convert::From<#ty> for StoreType {
-                fn from(value: #ty) -> StoreType {
-                    StoreType::Usize(value as usize)
-                }
-            }
-        }
-    });
 
     quote! {
         #(#parse_stmts)*
-        #(#from_stmts)*
     }
     .into()
 }
@@ -55,7 +45,17 @@ pub fn klass_debug_derive(input: TokenStream) -> TokenStream {
     unwrap_err!(klass_debug_derive_inner(&ast))
 }
 
-#[proc_macro_derive(ClassParser, attributes(impl_sized, set_ctx, get_ctx, constant_pool))]
+#[proc_macro_derive(
+    ClassParser,
+    attributes(
+        impl_sized,
+        set_count,
+        get_count,
+        constant_pool,
+        constant_index_end,
+        constant_index_check
+    )
+)]
 pub fn class_file_parse_derive(input: TokenStream) -> TokenStream {
     let ast = parse_macro_input!(input as Item);
     unwrap_err!(class_file_parse_derive_inner(&ast))

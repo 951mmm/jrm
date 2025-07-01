@@ -1,10 +1,16 @@
 use std::fmt::Debug;
+use std::rc::Rc;
 
-use crate::class_file_parser::{ClassParser, ParserContext, StoreType};
+use crate::class_file_parser::{ClassParser, ParserContext};
 use crate::class_reader::ClassReader;
 use jrm_macro::ClassParser;
-#[derive(Clone, ClassParser)]
-pub struct ConstantPool(#[impl_sized(constant_pool_count)] pub Vec<ConstantWrapper>);
+
+#[derive(ClassParser)]
+pub struct ConstantPool(
+    #[impl_sized(constant_pool_count)]
+    #[constant_pool]
+    pub Vec<ConstantWrapper>,
+);
 impl Debug for ConstantPool {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         writeln!(f)?;
@@ -20,21 +26,20 @@ impl Debug for ConstantPool {
 
 #[derive(Clone, Debug, ClassParser)]
 pub struct ConstantWrapper {
-    #[set_ctx]
+    #[set_count]
     pub tag: u8,
     pub constant: Constant,
 }
 
 #[derive(Clone, Debug, ClassParser)]
 #[repr(u8)]
-#[get_ctx(tag)]
 pub enum Constant {
     Utf8(ConstantUtf8) = 1,
     Integer(i32) = 3,
     Float(f32),
     Long(i64),
     Double(f64),
-    Class(u16),
+    Class(ConstantClass),
     String(u16),
     FieldRef(u16, u16),
     MethodRef(u16, u16),
@@ -51,7 +56,7 @@ pub enum Constant {
 
 #[derive(Clone, ClassParser)]
 pub struct ConstantUtf8 {
-    #[set_ctx]
+    #[set_count]
     pub length: u16,
     #[impl_sized(length)]
     pub bytes: Vec<u8>,
@@ -62,4 +67,10 @@ impl Debug for ConstantUtf8 {
         let utf8_string = String::from_utf8_lossy(&self.bytes);
         write!(f, "{}", utf8_string)
     }
+}
+
+#[derive(Clone, Debug, ClassParser)]
+pub struct ConstantClass {
+    #[constant_index_check]
+    pub name_index: u16,
 }

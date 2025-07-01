@@ -1,4 +1,4 @@
-
+use base_macro::simple_field_attr;
 use proc_macro2::Literal;
 use quote::{format_ident, quote};
 use syn::{
@@ -35,7 +35,6 @@ fn resolve_enum(item_enum: &ItemEnum) -> syn::Result<proc_macro2::TokenStream> {
     } = item_enum;
     let mut arm_expr = vec![];
     let mut cur_discr = 0;
-    let ctx_ident = attr_get_ctx(attrs)?;
     for variant in variants {
         let variant_ident = &variant.ident;
         let fields = &variant.fields;
@@ -84,26 +83,20 @@ fn resolve_enum(item_enum: &ItemEnum) -> syn::Result<proc_macro2::TokenStream> {
         arm_expr.push(expr);
     }
 
-    let result = if let Some(ctx_ident) = ctx_ident {
-        let key = get_ident_string_lit(&ctx_ident);
-        quote! {
-            impl ClassParser for #ident {
-                fn parse(class_reader: &mut ClassReader, ctx: &mut ParserContext) -> anyhow::Result<Self> {
-                    if let Some(StoreType::Usize(choice)) = ctx.store.get(#key).cloned() {
-                        let result = match choice {
-                            #(#arm_expr)*
-                            _ => {
-                                unreachable!()
-                            }
-                        };
-                        return Ok(result);
+    let result = quote! {
+        impl ClassParser for #ident {
+            fn parse(class_reader: &mut ClassReader, ctx: &mut ParserContext) -> anyhow::Result<Self> {
+                let choice = ctx.count.clone();
+                let result = match choice {
+                    #(#arm_expr)*
+                    _ => {
+                        unreachable!()
                     }
-                    anyhow::bail!("failed to get choice ({}) from ctx", #key)
-                }
+                };
+                return Ok(result);
+
             }
         }
-    } else {
-        unreachable!()
     };
     Ok(result)
 }
@@ -120,21 +113,34 @@ fn resolve_named(
         let field_ident = &field.ident;
         let field_ty = &field.ty;
 
-        let size_ident = attr_impl_sized(field)?;
-        let is_set_ctx = attr_set_ctx(field);
+        let is_impl_sized = attr_impl_sized(field);
+        let is_set_count = attr_set_count(field);
+        let is_constant_index_end = attr_constant_index_end(field);
+        let is_constant_index_check = attr_constant_index_check(field);
 
         let stmt = quote! {
             let #field_ident = <#field_ty as ClassParser>::parse(class_reader, ctx)?;
         };
 
-        if let Some(size_ident) = size_ident {
-            collection_impl_blocks.push(resolve_collection_impl(field_ty, &size_ident, false)?);
+        if is_impl_sized {
+            collection_impl_blocks.push(resolve_collection_impl(field_ty, false)?);
         }
         parse_stmts.push(stmt);
-        if is_set_ctx {
-            let key: String = field_ident.as_ref().unwrap().to_string();
+        if is_set_count {
             parse_stmts.push(quote! {
-                ctx.store.insert(#key.to_owned(), #field_ident.into());
+                ctx.count = #field_ident as usize;
+            });
+        }
+        if is_constant_index_end {
+            parse_stmts.push(quote! {
+                ctx.constant_index_range = 1..#field_ident;
+            });
+        }
+        if is_constant_index_check {
+            parse_stmts.push(quote! {
+                if !ctx.constant_index_range.contains(&#field_ident) {
+                    anyhow::bail!("invalid {}, not in range {:?}", stringify!(#field_ident), ctx.constant_index_range);
+                }
             });
         }
         field_idents.push(field_ident);
@@ -165,21 +171,22 @@ fn resolve_unnamed(
         let field_ty = &field.ty;
         let temp_ident = format_ident!("temp_{}", index);
 
-        let size_ident = attr_impl_sized(field)?;
+        let is_impl_sized = attr_impl_sized(field);
         let is_constant_pool = attr_constant_pool(field);
         let stmt = quote! {
             let #temp_ident = <#field_ty as ClassParser>::parse(class_reader, ctx)?;
         };
 
-        if let Some(size_ident) = size_ident {
-            collection_impl_block = Some(resolve_collection_impl(
-                field_ty,
-                &size_ident,
-                is_constant_pool,
-            )?);
+        if is_impl_sized {
+            collection_impl_block = Some(resolve_collection_impl(field_ty, is_constant_pool)?);
+        }
+        parse_stmts.push(stmt);
+        if is_constant_pool {
+            parse_stmts.push(quote! {
+                ctx.constant_pool = #temp_ident.clone();
+            });
         }
         temp_idents.push(temp_ident);
-        parse_stmts.push(stmt);
     }
     let result = quote! {
         impl ClassParser for #struct_ident {
@@ -193,11 +200,6 @@ fn resolve_unnamed(
     Ok(result)
 }
 
-macro_rules! simple_attr {
-    ($field: ident, $name: literal) => {
-        $field.attrs.iter().any(|attr| attr.path().is_ident($name))
-    };
-}
 // fn attr_not_zero(field: &Field) -> bool {
 //     simple_attr!(field, "not_zero")
 // }
@@ -211,32 +213,23 @@ macro_rules! paren_attr {
         }
     };
 }
-fn attr_impl_sized(field: &Field) -> syn::Result<Option<Ident>> {
-    paren_attr!(field, "impl_sized", Ident);
-    Ok(None)
-}
-fn attr_set_ctx(field: &Field) -> bool {
-    simple_attr!(field, "set_ctx")
-}
-fn attr_constant_pool(field: &Field) -> bool {
-    simple_attr!(field, "constant_pool")
-}
-fn attr_get_ctx(attrs: &Vec<Attribute>) -> syn::Result<Option<Ident>> {
-    for attr in attrs {
-        if attr.path().is_ident("get_ctx") {
-            return Ok(Some(attr.parse_args::<Ident>()?));
-        }
-    }
-    Ok(None)
-}
+// fn attr_impl_sized(field: &Field) -> syn::Result<Option<Ident>> {
+//     paren_attr!(field, "impl_sized", Ident);
+//     Ok(None)
+// }
+simple_field_attr! {"impl_sized"}
+simple_field_attr! {"set_count"}
+simple_field_attr! {"get_count"}
+simple_field_attr! {"constant_pool"}
+simple_field_attr! {"constant_index_end"}
+simple_field_attr! {"constant_index_check"}
+#[allow(unused_variables)]
 fn resolve_collection_impl(
     collection_ty: &Type,
-    size_ident: &Ident,
     is_constant_pool: bool,
 ) -> syn::Result<proc_macro2::TokenStream> {
     let collection_ident = get_collection_ident(collection_ty)?;
     let inner_ty = get_inner_ty(collection_ty)?;
-    let size_ident_string_lit = get_ident_string_lit(size_ident);
     let stmts = if is_constant_pool {
         quote! {
             let mut collection = #collection_ident::with_capacity(size);
@@ -262,10 +255,8 @@ fn resolve_collection_impl(
     Ok(quote! {
         impl ClassParser for #collection_ty {
             fn parse(class_reader: &mut ClassReader, ctx: &mut ParserContext) -> anyhow::Result<Self> {
-                if let Some(StoreType::Usize(size)) = ctx.store.get(#size_ident_string_lit).cloned() {
-                    #stmts
-                }
-                anyhow::bail!("failed to get size ({}) from ctx", #size_ident_string_lit)
+                let size = ctx.count.clone();
+                #stmts
             }
         }
     })
@@ -291,9 +282,4 @@ fn get_inner_ty(ty: &Type) -> syn::Result<&Type> {
         }
     }
     Err(syn::Error::new_spanned(ty, "Invalid inner type for Vec"))
-}
-fn get_ident_string_lit(ident: &Ident) -> Lit {
-    let ident_string = ident.to_string();
-    
-    Lit::new(Literal::string(&ident_string))
 }

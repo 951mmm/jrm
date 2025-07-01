@@ -1,33 +1,26 @@
-use std::{collections::HashMap, fmt::Debug};
+use std::{collections::HashMap, fmt::Debug, ops::Range};
 
 use jrm_macro::{ClassParser, KlassDebug, generate_ux};
 
-use crate::{attribute::Attribute, class_reader::ClassReader, constant_pool::ConstantPool};
+use crate::{
+    attribute::Attribute,
+    class_reader::ClassReader,
+    constant_pool::{ConstantClass, ConstantPool, ConstantWrapper},
+};
 
-#[derive(Clone, Debug)]
-pub enum StoreType {
-    Usize(usize),
-    ConstantPool(ConstantPool),
-}
-impl From<usize> for StoreType {
-    fn from(value: usize) -> Self {
-        StoreType::Usize(value)
-    }
-}
-
-impl From<ConstantPool> for StoreType {
-    fn from(value: ConstantPool) -> Self {
-        StoreType::ConstantPool(value)
-    }
-}
 pub struct ParserContext {
-    pub store: HashMap<String, StoreType>,
+    pub count: usize,
+    pub constant_index_range: Range<u16>,
+    pub constant_pool: Vec<ConstantWrapper>,
 }
 
 impl ParserContext {
     pub fn new() -> Self {
-        let store = HashMap::new();
-        Self { store }
+        Self {
+            count: 0,
+            constant_index_range: 0..0,
+            constant_pool: vec![],
+        }
     }
 }
 pub trait ClassParser {
@@ -84,29 +77,33 @@ pub struct InstanceKlass {
     magic: u32,
     minor_version: u16,
     major_version: u16,
-    #[set_ctx]
+    #[set_count]
+    #[constant_index_end]
     constant_pool_count: u16,
     constant_pool: ConstantPool,
     #[hex]
+    #[constant_index_check]
     access_flags: u16,
+    #[constant_index_check]
     this_class: u16,
+    #[constant_index_check]
     super_class: u16,
-    #[set_ctx]
+    #[set_count]
     interfaces_count: u16,
-    #[impl_sized(constant_pool_count)]
-    interfaces: Vec<u16>,
-    #[set_ctx]
+    #[impl_sized]
+    interfaces: Vec<Interface>,
+    #[set_count]
     fields_count: u16,
-    #[impl_sized(fields_count)]
+    #[impl_sized]
     fields: Vec<Field>,
-    #[set_ctx]
+    #[set_count]
     methods_count: u16,
-    #[impl_sized(methods_count)]
+    #[impl_sized]
     methods: Vec<Method>,
     // attributes_count: u16,
     // attributes: Vec<AttributeInfo>,
 }
-
+type Interface = ConstantClass;
 #[derive(Debug, ClassParser)]
 pub struct Field(Property);
 
@@ -118,8 +115,8 @@ pub struct Property {
     access_flags: u16,
     name_index: u16,
     descriptor_index: u16,
-    #[set_ctx]
+    #[set_count]
     attributes_count: u16,
-    #[impl_sized(attributes_count)]
-    attributes: Vec<Attribute>,
+    // #[impl_sized(attributes_count)]
+    // attributes: Vec<Attribute>,
 }

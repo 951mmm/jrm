@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["crates/jrm", "crates/jrm-macro"]
+members = [ "crates/base-macro","crates/jrm", "crates/jrm-macro"]
 
 [workspace.dependencies]
 anyhow = "1.0.98"
