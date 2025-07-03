@@ -1,9 +1,9 @@
-use base_macro::simple_field_attr;
+use base_macro::{attr_enum, simple_field_attr};
 use proc_macro2::Literal;
 use quote::{format_ident, quote};
 use syn::{
-    Attribute, Field, Fields, FieldsNamed, FieldsUnnamed, GenericArgument, Ident, Item, ItemEnum,
-    ItemStruct, Lit, LitInt, PathArguments, Type, TypePath, parse_quote,
+    Fields, FieldsNamed, FieldsUnnamed, GenericArgument, Ident, Item, ItemEnum, ItemStruct,
+    Lit, LitInt, PathArguments, Type, TypePath, parse_quote,
 };
 
 pub fn class_file_parse_derive_inner(ast: &Item) -> syn::Result<proc_macro2::TokenStream> {
@@ -28,10 +28,7 @@ fn resolve_struct(item_struct: &ItemStruct) -> syn::Result<proc_macro2::TokenStr
 
 fn resolve_enum(item_enum: &ItemEnum) -> syn::Result<proc_macro2::TokenStream> {
     let ItemEnum {
-        variants,
-        ident,
-        attrs,
-        ..
+        variants, ident, ..
     } = item_enum;
     let mut arm_expr = vec![];
     let mut cur_discr = 0;
@@ -68,9 +65,9 @@ fn resolve_enum(item_enum: &ItemEnum) -> syn::Result<proc_macro2::TokenStream> {
 
         let expr = if fields.is_empty() {
             quote! {
-                #discr_val_lit => {
-                    #ident::#variant_ident
-                }
+                    #discr_val_lit => {
+                        #ident::#variant_ident
+                    }
             }
         } else {
             quote! {
@@ -114,9 +111,10 @@ fn resolve_named(
         let field_ty = &field.ty;
 
         let is_impl_sized = attr_impl_sized(field);
-        let is_set_count = attr_set_count(field);
-        let is_constant_index_end = attr_constant_index_end(field);
-        let is_constant_index_check = attr_constant_index_check(field);
+        let is_set_count = attr_count(field)?.eq(&Count::Set);
+        let constant_index = attr_constant_index(field)?;
+        let is_constant_index_end = constant_index.eq(&ConstantIndex::Setend);
+        let is_constant_index_check = constant_index.eq(&ConstantIndex::Check);
 
         let stmt = quote! {
             let #field_ident = <#field_ty as ClassParser>::parse(class_reader, ctx)?;
@@ -218,11 +216,28 @@ macro_rules! paren_attr {
 //     Ok(None)
 // }
 simple_field_attr! {"impl_sized"}
-simple_field_attr! {"set_count"}
-simple_field_attr! {"get_count"}
+// simple_field_attr! {"set_count"}
+// simple_field_attr! {"get_count"}
 simple_field_attr! {"constant_pool"}
-simple_field_attr! {"constant_index_end"}
-simple_field_attr! {"constant_index_check"}
+macro_rules! syn_err {
+    ($span: ident, $msg: literal) => {
+        return Err(syn::Error::new_spanned($span, $msg))
+    };
+}
+#[derive(PartialEq, Eq)]
+#[attr_enum]
+enum ConstantIndex {
+    Setend,
+    Check,
+}
+
+#[derive(PartialEq, Eq)]
+#[attr_enum]
+enum Count {
+    Set,
+    Get,
+}
+
 #[allow(unused_variables)]
 fn resolve_collection_impl(
     collection_ty: &Type,
@@ -267,7 +282,7 @@ fn get_collection_ident(ty: &Type) -> syn::Result<&Ident> {
             return Ok(&segment.ident);
         }
     }
-    Err(syn::Error::new_spanned(ty, "failed to get collection ty"))
+    syn_err!(ty, "failed to get collection ty")
 }
 fn get_inner_ty(ty: &Type) -> syn::Result<&Type> {
     if let Type::Path(TypePath { path, .. }) = ty {
@@ -281,5 +296,5 @@ fn get_inner_ty(ty: &Type) -> syn::Result<&Type> {
             }
         }
     }
-    Err(syn::Error::new_spanned(ty, "Invalid inner type for Vec"))
+    syn_err!(ty, "Invalid inner type for Vec");
 }

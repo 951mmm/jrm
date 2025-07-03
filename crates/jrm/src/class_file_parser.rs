@@ -1,9 +1,8 @@
-use std::{collections::HashMap, fmt::Debug, ops::Range};
+use std::{any::Any, cell::RefCell, fmt::Debug, ops::Range, rc::Rc};
 
 use jrm_macro::{ClassParser, KlassDebug, generate_ux};
 
 use crate::{
-    attribute::Attribute,
     class_reader::ClassReader,
     constant_pool::{ConstantClass, ConstantPool, ConstantWrapper},
 };
@@ -12,6 +11,7 @@ pub struct ParserContext {
     pub count: usize,
     pub constant_index_range: Range<u16>,
     pub constant_pool: Vec<ConstantWrapper>,
+    pub ahead: Rc<RefCell<dyn Any>>,
 }
 
 impl ParserContext {
@@ -20,6 +20,7 @@ impl ParserContext {
             count: 0,
             constant_index_range: 0..0,
             constant_pool: vec![],
+            ahead: Rc::new(RefCell::new(0)),
         }
     }
 }
@@ -77,26 +78,26 @@ pub struct InstanceKlass {
     magic: u32,
     minor_version: u16,
     major_version: u16,
-    #[set_count]
-    #[constant_index_end]
+    #[count(set)]
+    #[constant_index(setend)]
     constant_pool_count: u16,
     constant_pool: ConstantPool,
     #[hex]
-    #[constant_index_check]
+    #[constant_index(check)]
     access_flags: u16,
-    #[constant_index_check]
+    #[constant_index(check)]
     this_class: u16,
-    #[constant_index_check]
+    #[constant_index(check)]
     super_class: u16,
-    #[set_count]
+    #[count(set)]
     interfaces_count: u16,
     #[impl_sized]
     interfaces: Vec<Interface>,
-    #[set_count]
+    #[count(set)]
     fields_count: u16,
     #[impl_sized]
     fields: Vec<Field>,
-    #[set_count]
+    #[count(set)]
     methods_count: u16,
     #[impl_sized]
     methods: Vec<Method>,
@@ -115,7 +116,7 @@ pub struct Property {
     access_flags: u16,
     name_index: u16,
     descriptor_index: u16,
-    #[set_count]
+    #[count(set)]
     attributes_count: u16,
     // #[impl_sized(attributes_count)]
     // attributes: Vec<Attribute>,

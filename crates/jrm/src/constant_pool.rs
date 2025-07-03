@@ -1,5 +1,4 @@
 use std::fmt::Debug;
-use std::rc::Rc;
 
 use crate::class_file_parser::{ClassParser, ParserContext};
 use crate::class_reader::ClassReader;
@@ -26,7 +25,7 @@ impl Debug for ConstantPool {
 
 #[derive(Clone, Debug, ClassParser)]
 pub struct ConstantWrapper {
-    #[set_count]
+    #[count(set)]
     pub tag: u8,
     pub constant: Constant,
 }
@@ -56,7 +55,7 @@ pub enum Constant {
 
 #[derive(Clone, ClassParser)]
 pub struct ConstantUtf8 {
-    #[set_count]
+    #[count(set)]
     pub length: u16,
     #[impl_sized(length)]
     pub bytes: Vec<u8>,
@@ -71,6 +70,6 @@ impl Debug for ConstantUtf8 {
 
 #[derive(Clone, Debug, ClassParser)]
 pub struct ConstantClass {
-    #[constant_index_check]
+    #[constant_index(check)]
     pub name_index: u16,
 }
