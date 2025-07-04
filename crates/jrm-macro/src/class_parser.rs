@@ -2,8 +2,8 @@ use base_macro::{attr_enum, simple_field_attr};
 use proc_macro2::Literal;
 use quote::{format_ident, quote};
 use syn::{
-    Fields, FieldsNamed, FieldsUnnamed, GenericArgument, Ident, Item, ItemEnum, ItemStruct,
-    Lit, LitInt, PathArguments, Type, TypePath, parse_quote,
+    Fields, FieldsNamed, FieldsUnnamed, GenericArgument, Ident, Item, ItemEnum, ItemStruct, Lit,
+    LitInt, PathArguments, Type, TypePath, parse_quote,
 };
 
 pub fn class_file_parse_derive_inner(ast: &Item) -> syn::Result<proc_macro2::TokenStream> {
@@ -110,7 +110,7 @@ fn resolve_named(
         let field_ident = &field.ident;
         let field_ty = &field.ty;
 
-        let is_impl_sized = attr_impl_sized(field);
+        let is_get_count = attr_count(field)?.eq(&Count::Get);
         let is_set_count = attr_count(field)?.eq(&Count::Set);
         let constant_index = attr_constant_index(field)?;
         let is_constant_index_end = constant_index.eq(&ConstantIndex::Setend);
@@ -120,7 +120,7 @@ fn resolve_named(
             let #field_ident = <#field_ty as ClassParser>::parse(class_reader, ctx)?;
         };
 
-        if is_impl_sized {
+        if is_get_count {
             collection_impl_blocks.push(resolve_collection_impl(field_ty, false)?);
         }
         parse_stmts.push(stmt);
@@ -169,13 +169,13 @@ fn resolve_unnamed(
         let field_ty = &field.ty;
         let temp_ident = format_ident!("temp_{}", index);
 
-        let is_impl_sized = attr_impl_sized(field);
+        let is_get_count = attr_count(field)?.eq(&Count::Get);
         let is_constant_pool = attr_constant_pool(field);
         let stmt = quote! {
             let #temp_ident = <#field_ty as ClassParser>::parse(class_reader, ctx)?;
         };
 
-        if is_impl_sized {
+        if is_get_count {
             collection_impl_block = Some(resolve_collection_impl(field_ty, is_constant_pool)?);
         }
         parse_stmts.push(stmt);
@@ -198,10 +198,6 @@ fn resolve_unnamed(
     Ok(result)
 }
 
-// fn attr_not_zero(field: &Field) -> bool {
-//     simple_attr!(field, "not_zero")
-// }
-
 macro_rules! paren_attr {
     ($field: ident, $name: literal, $ty: ty) => {
         for attr in &$field.attrs {
@@ -211,13 +207,7 @@ macro_rules! paren_attr {
         }
     };
 }
-// fn attr_impl_sized(field: &Field) -> syn::Result<Option<Ident>> {
-//     paren_attr!(field, "impl_sized", Ident);
-//     Ok(None)
-// }
 simple_field_attr! {"impl_sized"}
-// simple_field_attr! {"set_count"}
-// simple_field_attr! {"get_count"}
 simple_field_attr! {"constant_pool"}
 macro_rules! syn_err {
     ($span: ident, $msg: literal) => {
@@ -238,7 +228,6 @@ enum Count {
     Get,
 }
 
-#[allow(unused_variables)]
 fn resolve_collection_impl(
     collection_ty: &Type,
     is_constant_pool: bool,

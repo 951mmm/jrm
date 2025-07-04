@@ -6,7 +6,7 @@ use jrm_macro::ClassParser;
 
 #[derive(ClassParser)]
 pub struct ConstantPool(
-    #[impl_sized(constant_pool_count)]
+    #[count(get)]
     #[constant_pool]
     pub Vec<ConstantWrapper>,
 );
@@ -57,7 +57,7 @@ pub enum Constant {
 pub struct ConstantUtf8 {
     #[count(set)]
     pub length: u16,
-    #[impl_sized(length)]
+    #[count(get)]
     pub bytes: Vec<u8>,
 }
 

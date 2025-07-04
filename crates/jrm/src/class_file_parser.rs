@@ -91,15 +91,15 @@ pub struct InstanceKlass {
     super_class: u16,
     #[count(set)]
     interfaces_count: u16,
-    #[impl_sized]
+    #[count(get)]
     interfaces: Vec<Interface>,
     #[count(set)]
     fields_count: u16,
-    #[impl_sized]
+    #[count(get)]
     fields: Vec<Field>,
     #[count(set)]
     methods_count: u16,
-    #[impl_sized]
+    #[count(get)]
     methods: Vec<Method>,
     // attributes_count: u16,
     // attributes: Vec<AttributeInfo>,

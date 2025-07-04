@@ -1,4 +1,4 @@
-mod attribute;
+mod attributes;
 mod class_file_parser;
 mod class_reader;
 mod constant_pool;

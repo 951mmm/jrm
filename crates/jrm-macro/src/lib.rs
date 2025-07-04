@@ -1,16 +1,18 @@
+mod base_attribbute;
 mod class_parser;
 mod klass_debug;
 
 use proc_macro::TokenStream;
 use quote::quote;
-use syn::punctuated::Punctuated;
+use syn::parse::{Parse, Parser};
 use syn::{
-    DeriveInput, Field, Fields, Ident, Item, ItemStruct, Token, Type, parse_macro_input,
-    parse_quote,
+    DeriveInput, Ident, Item, ItemStruct, Stmt, Type,
+    parse_macro_input, parse_quote,
 };
 
 use base_macro::unwrap_err;
 
+use crate::base_attribbute::base_attrubute_inner;
 use crate::class_parser::class_file_parse_derive_inner;
 use crate::klass_debug::klass_debug_derive_inner;
 
@@ -43,40 +45,45 @@ pub fn klass_debug_derive(input: TokenStream) -> TokenStream {
     unwrap_err!(klass_debug_derive_inner(&ast))
 }
 
-#[proc_macro_derive(
-    ClassParser,
-    attributes(impl_sized, count, constant_pool, constant_index, ahead)
-)]
+#[proc_macro_derive(ClassParser, attributes(count, constant_pool, constant_index, ahead))]
 pub fn class_file_parse_derive(input: TokenStream) -> TokenStream {
     let ast = parse_macro_input!(input as Item);
     unwrap_err!(class_file_parse_derive_inner(&ast))
 }
 
 #[proc_macro_attribute]
-pub fn base_attribute(_attr: TokenStream, item: TokenStream) -> TokenStream {
-    let base_fields_prefix = [
-        quote! {attribute_name_index: u16},
-        quote! {attribute_length: u32},
-    ];
-    let base_fields_suffix = [
-        quote! {attributes_count: u16},
-        quote! {attributes: Vec<Attribute>},
-    ];
+pub fn base_attribute(attr: TokenStream, item: TokenStream) -> TokenStream {
+    let attrs = parse_macro_input!(attr as base_attribbute::Attrs);
     let mut item_struct = parse_macro_input!(item as ItemStruct);
+    unwrap_err!(base_attrubute_inner(&attrs, &mut item_struct))
+}
 
-    if let Fields::Named(ref mut field_named) = item_struct.fields {
-        let mut new_named: Punctuated<Field, Token![,]> = Punctuated::new();
-        for base_field in base_fields_prefix {
-            new_named.push(parse_quote!(#base_field));
+struct DefineAttributes {
+    stmts: Vec<Stmt>,
+}
+
+impl Parse for DefineAttributes {
+    fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
+        let mut stmts = vec![];
+        while !input.is_empty() {
+            stmts.push(input.parse::<Stmt>()?);
         }
-        new_named.extend(field_named.named.clone());
-        for base_field in base_fields_suffix {
-            new_named.push(parse_quote!(#base_field));
-        }
-        field_named.named = new_named;
+        Ok(Self { stmts })
     }
+}
+#[proc_macro]
+pub fn define_attributes(input: TokenStream) -> TokenStream {
+    let mut stmts = parse_macro_input!(input as DefineAttributes).stmts;
+    for stmt in stmts.iter_mut() {
+        if let Stmt::Item(item) = stmt {
+            if let Item::Struct(item_struct) = item {
+                item_struct.attrs.push(parse_quote!(#[base_attribute]));
+            }
+        }
+    }
+
     quote! {
-        #item_struct
+        #(#stmts)*
     }
     .into()
 }
