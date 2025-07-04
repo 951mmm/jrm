@@ -3,11 +3,11 @@ mod class_parser;
 mod klass_debug;
 
 use proc_macro::TokenStream;
-use quote::quote;
+use quote::{format_ident, quote};
 use syn::parse::{Parse, Parser};
+use syn::punctuated::Punctuated;
 use syn::{
-    DeriveInput, Ident, Item, ItemStruct, Stmt, Type,
-    parse_macro_input, parse_quote,
+    DeriveInput, Ident, Item, ItemStruct, Stmt, Token, Type, parse_macro_input, parse_quote,
 };
 
 use base_macro::unwrap_err;
@@ -58,32 +58,59 @@ pub fn base_attribute(attr: TokenStream, item: TokenStream) -> TokenStream {
     unwrap_err!(base_attrubute_inner(&attrs, &mut item_struct))
 }
 
-struct DefineAttributes {
-    stmts: Vec<Stmt>,
-}
+// struct DefineAttributes {
+//     stmts: Vec<Stmt>,
+// }
 
-impl Parse for DefineAttributes {
+// impl Parse for DefineAttributes {
+//     fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
+//         let mut stmts = vec![];
+//         while !input.is_empty() {
+//             stmts.push(input.parse::<Stmt>()?);
+//         }
+//         Ok(Self { stmts })
+//     }
+// }
+// #[proc_macro]
+// pub fn define_attributes(input: TokenStream) -> TokenStream {
+//     let mut stmts = parse_macro_input!(input as DefineAttributes).stmts;
+//     for stmt in stmts.iter_mut() {
+//         if let Stmt::Item(item) = stmt {
+//             if let Item::Struct(item_struct) = item {
+//                 item_struct.attrs.push(parse_quote!(#[base_attribute]));
+//             }
+//         }
+//     }
+
+//     quote! {
+//         #(#stmts)*
+//     }
+//     .into()
+// }
+struct AttributeEnum {
+    idents: Punctuated<Ident, Token![,]>,
+}
+impl Parse for AttributeEnum {
     fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
-        let mut stmts = vec![];
-        while !input.is_empty() {
-            stmts.push(input.parse::<Stmt>()?);
-        }
-        Ok(Self { stmts })
+        let idents = Punctuated::<Ident, Token![,]>::parse_terminated(input)?;
+        Ok(AttributeEnum { idents })
     }
 }
 #[proc_macro]
-pub fn define_attributes(input: TokenStream) -> TokenStream {
-    let mut stmts = parse_macro_input!(input as DefineAttributes).stmts;
-    for stmt in stmts.iter_mut() {
-        if let Stmt::Item(item) = stmt {
-            if let Item::Struct(item_struct) = item {
-                item_struct.attrs.push(parse_quote!(#[base_attribute]));
-            }
+pub fn attribute_enum(input: TokenStream) -> TokenStream {
+    let attribute_enum = parse_macro_input!(input as AttributeEnum);
+
+    let variants = attribute_enum.idents.iter().map(|ident| {
+        let attribute_ident = format_ident!("{}Attribute", ident);
+        quote! {
+            #ident(#attribute_ident)
         }
-    }
+    });
 
     quote! {
-        #(#stmts)*
+        pub enum Attribute {
+            #(#variants),*
+        }
     }
     .into()
 }

@@ -110,8 +110,7 @@ fn resolve_named(
         let field_ident = &field.ident;
         let field_ty = &field.ty;
 
-        let is_get_count = attr_count(field)?.eq(&Count::Get);
-        let is_set_count = attr_count(field)?.eq(&Count::Set);
+        let count = attr_count(field)?;
         let constant_index = attr_constant_index(field)?;
         let is_constant_index_end = constant_index.eq(&ConstantIndex::Setend);
         let is_constant_index_check = constant_index.eq(&ConstantIndex::Check);
@@ -120,15 +119,18 @@ fn resolve_named(
             let #field_ident = <#field_ty as ClassParser>::parse(class_reader, ctx)?;
         };
 
-        if is_get_count {
-            collection_impl_blocks.push(resolve_collection_impl(field_ty, false)?);
-        }
         parse_stmts.push(stmt);
-        if is_set_count {
-            parse_stmts.push(quote! {
-                ctx.count = #field_ident as usize;
-            });
-        }
+        match count {
+            Count::Get => {
+                collection_impl_blocks.push(resolve_collection_impl(field_ty, false)?);
+            }
+            Count::Set => {
+                parse_stmts.push(quote! {
+                    ctx.count = #field_ident as usize;
+                });
+            }
+            _ => {}
+        };
         if is_constant_index_end {
             parse_stmts.push(quote! {
                 ctx.constant_index_range = 1..#field_ident;
@@ -226,6 +228,7 @@ enum ConstantIndex {
 enum Count {
     Set,
     Get,
+    GetBytes,
 }
 
 fn resolve_collection_impl(

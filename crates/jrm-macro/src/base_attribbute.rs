@@ -6,10 +6,12 @@ use syn::{
 };
 pub struct Attrs {
     suffix: Option<(Ident, Type)>,
+    bytes: bool,
 }
 impl Parse for Attrs {
     fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
         let mut suffix = None;
+        let mut bytes = false;
 
         let attrs = Punctuated::<Attr, Token![,]>::parse_terminated(input)?;
         for attr in attrs {
@@ -18,13 +20,15 @@ impl Parse for Attrs {
                     count_ident,
                     list_ty,
                 } => suffix = Some((count_ident, list_ty)),
+                Attr::Bytes => bytes = true,
             }
         }
-        Ok(Attrs { suffix })
+        Ok(Attrs { suffix, bytes })
     }
 }
 enum Attr {
     Suffix { count_ident: Ident, list_ty: Type },
+    Bytes,
 }
 impl Parse for Attr {
     fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
@@ -42,6 +46,7 @@ impl Parse for Attr {
                     list_ty,
                 })
             }
+            "bytes" => Ok(Attr::Bytes),
             _ => Err(syn::Error::new_spanned(
                 attr_ident,
                 format_args!("unsurpport attr: {}", attr_ident),
@@ -55,8 +60,8 @@ pub fn base_attrubute_inner(
     item_struct: &mut ItemStruct,
 ) -> syn::Result<proc_macro2::TokenStream> {
     let base_fields_prefix = [
-        quote! {attribute_name_index: u16},
-        quote! {attribute_length: u32},
+        quote! {pub attribute_name_index: u16},
+        quote! {pub attribute_length: u32},
     ];
     if let Fields::Named(ref mut field_named) = item_struct.fields {
         let mut new_named: Punctuated<Field, Token![,]> = Punctuated::new();
@@ -70,11 +75,21 @@ pub fn base_attrubute_inner(
                 .to_case(Case::Snake);
             let list_ident = format_ident!("{}s", list_ty_snake);
             new_named.push(parse_quote!(
-                #count_ident: u16
+                #[count(set)]
+                pub #count_ident: u16
             ));
-            new_named.push(parse_quote!(
-                #list_ident: Vec<#list_ty>
-            ));
+            let list_field = if attrs.bytes {
+                quote!(
+                    #[count(get_bytes)]
+                    pub #list_ident: Vec<#list_ty>
+                )
+            } else {
+                quote!(
+                    #[count(get)]
+                    pub #list_ident: Vec<#list_ty>
+                )
+            };
+            new_named.push(parse_quote!(#list_field));
         }
         field_named.named = new_named;
     }

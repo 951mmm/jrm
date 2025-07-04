@@ -57,7 +57,7 @@ pub enum Constant {
 pub struct ConstantUtf8 {
     #[count(set)]
     pub length: u16,
-    #[count(get)]
+    #[count(get_bytes)]
     pub bytes: Vec<u8>,
 }
 

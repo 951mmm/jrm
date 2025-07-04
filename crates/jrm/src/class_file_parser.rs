@@ -72,6 +72,17 @@ impl ClassParser for f64 {
     }
 }
 
+impl ClassParser for Vec<u8> {
+    fn parse(class_reader: &mut ClassReader, ctx: &mut ParserContext) -> anyhow::Result<Self>
+    where
+        Self: Sized,
+    {
+        let size = ctx.count.clone();
+        let bytes = class_reader.read_bydes(size).unwrap_or(vec![]);
+        Ok(bytes)
+    }
+}
+
 #[derive(KlassDebug, ClassParser)]
 pub struct InstanceKlass {
     #[hex]
