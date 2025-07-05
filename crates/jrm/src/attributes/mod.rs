@@ -1,16 +1,17 @@
 mod code;
 
-use crate::class_file_parser::{ClassParser, ParserContext};
+use crate::class_file_parser::{ClassParser, ContextIndex, ParserContext};
 use crate::class_reader::ClassReader;
-use jrm_macro::{ClassParser, attribute_enum, base_attribute};
+use jrm_macro::{ClassParser, attribute_enum, base_attribute, impl_class_parser_for_vec};
 
 use code::Exception;
 
 attribute_enum! {Code, LineNumberTable}
+impl_class_parser_for_vec! {Attribute}
 
 // FIXME 注意宏的作用顺序
 #[base_attribute(suffix(attributes_count, Attribute))]
-#[derive(ClassParser)]
+#[derive(Debug, ClassParser)]
 pub struct CodeAttribute {
     pub max_stack: u16,
     pub max_locals: u16,
@@ -25,7 +26,7 @@ pub struct CodeAttribute {
 }
 
 #[base_attribute(suffix(line_number_table_length, LineNumberTable))]
-#[derive(ClassParser)]
+#[derive(Debug, ClassParser)]
 pub struct LineNumberTableAttribute {}
-#[derive(ClassParser)]
+#[derive(Debug, ClassParser)]
 pub struct LineNumberTable {}

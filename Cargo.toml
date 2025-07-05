@@ -1,6 +1,11 @@
 [workspace]
 resolver = "2"
-members = [ "crates/base-macro","crates/jrm", "crates/jrm-macro"]
+members = [
+    "crates/base-macro",
+    "crates/jrm",
+    "crates/jrm-macro",
+    "crates/macro-utils",
+]
 
 [workspace.dependencies]
 anyhow = "1.0.98"
@@ -10,3 +15,5 @@ syn = "2.0.104"
 convert_case = "0.8.0"
 proc-macro2 = "1.0.95"
 quote = "1.0.40"
+
+prettyplease = "0.2"

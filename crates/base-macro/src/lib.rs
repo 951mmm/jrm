@@ -1,7 +1,10 @@
 use convert_case::{Case, Casing};
 use proc_macro::TokenStream;
 use quote::{format_ident, quote};
-use syn::{Data, DeriveInput, Expr, LitStr, parse_macro_input, parse_quote};
+use syn::{
+    Data, DeriveInput, Expr, Ident, Lit, LitStr, Token, parse::Parse, parse_macro_input,
+    parse_quote,
+};
 
 #[proc_macro]
 pub fn simple_field_attr(input: TokenStream) -> TokenStream {
@@ -25,6 +28,44 @@ pub fn unwrap_err(input: TokenStream) -> TokenStream {
         }
     }
     .into()
+}
+struct SynErr {
+    pub ident: Option<Ident>,
+    pub msg: Lit,
+}
+
+impl Parse for SynErr {
+    fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
+        let ident = if input.peek(Ident) {
+            let ident: Ident = input.parse()?;
+            input.parse::<Token![,]>()?;
+            Some(ident)
+        } else {
+            None
+        };
+        let msg: Lit = input.parse()?;
+        Ok(Self { ident, msg })
+    }
+}
+#[proc_macro]
+pub fn syn_err(input: TokenStream) -> TokenStream {
+    let ast = parse_macro_input!(input as SynErr);
+    syn_err_inner(&ast).into()
+}
+fn syn_err_inner(ast: &SynErr) -> proc_macro2::TokenStream {
+    let SynErr { ident, msg } = ast;
+    match ident {
+        Some(ident) => {
+            quote! {
+                return Err(syn::Error::new_spanned(#ident, #msg))
+            }
+        }
+        None => {
+            quote! {
+                return Err(syn::Error::new_spanned(proc_macro2::Span::call_site(), #msg))
+            }
+        }
+    }
 }
 
 #[proc_macro_attribute]
@@ -81,6 +122,7 @@ pub fn attr_enum(_attr: TokenStream, input: TokenStream) -> TokenStream {
 
         data_enum.variants.push(parse_quote!(None));
     }
+    ast.attrs.push(parse_quote!(#[derive(Eq, PartialEq)]));
 
     let fn_ident = format_ident!("attr_{}", enum_ident_string);
     quote! {
@@ -97,4 +139,30 @@ pub fn attr_enum(_attr: TokenStream, input: TokenStream) -> TokenStream {
         }
     }
     .into()
+}
+
+#[cfg(test)]
+mod tests {
+    
+    
+    use syn::parse_quote;
+
+    use crate::{SynErr, syn_err_inner};
+
+    #[test]
+    fn test_syn_err_2_param_expand() {
+        let ast: SynErr = parse_quote!(some, "some parse err");
+        let expanded = syn_err_inner(&ast);
+        let raw_code = expanded.to_string();
+        assert!(raw_code.contains("some ,"));
+        println!("{}", expanded);
+    }
+    #[test]
+    fn test_syn_err_param_expand() {
+        let ast: SynErr = parse_quote!("some parse err");
+        let expanded = syn_err_inner(&ast);
+        let raw_code = expanded.to_string();
+        assert!(raw_code.contains("Span :: call_site"));
+        println!("{}", expanded);
+    }
 }

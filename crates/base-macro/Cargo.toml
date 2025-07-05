@@ -9,3 +9,4 @@ syn = { workspace = true }
 quote = { workspace = true }
 proc-macro2 = { workspace = true }
 convert_case = { workspace = true }
+macro-utils = { path = "../macro-utils" }

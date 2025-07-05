@@ -43,7 +43,7 @@ impl ClassReader {
         )
     }
 
-    pub fn read_bydes(&mut self, size: usize) -> Option<Vec<u8>> {
+    pub fn read_bytes(&mut self, size: usize) -> Option<Vec<u8>> {
         if self.cur + size > self.buffer.len() {
             return None;
         }

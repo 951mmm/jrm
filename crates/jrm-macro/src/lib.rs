@@ -1,19 +1,25 @@
 mod base_attribbute;
+mod build_enum_input;
 mod class_parser;
+mod constant;
+mod constant_enum;
+mod define_constants;
+mod impl_class_parser_for_vec;
 mod klass_debug;
+mod utils;
 
 use proc_macro::TokenStream;
 use quote::{format_ident, quote};
-use syn::parse::{Parse, Parser};
-use syn::punctuated::Punctuated;
-use syn::{
-    DeriveInput, Ident, Item, ItemStruct, Stmt, Token, Type, parse_macro_input, parse_quote,
-};
+use syn::{DeriveInput, Ident, Item, ItemStruct, Type, parse_macro_input, parse_quote};
 
 use base_macro::unwrap_err;
 
 use crate::base_attribbute::base_attrubute_inner;
 use crate::class_parser::class_file_parse_derive_inner;
+use crate::constant::constant_inner;
+use crate::constant_enum::constant_enum_inner;
+use crate::define_constants::define_constants_inner;
+use crate::impl_class_parser_for_vec::impl_class_parser_for_vec_inner;
 use crate::klass_debug::klass_debug_derive_inner;
 
 #[proc_macro]
@@ -45,7 +51,10 @@ pub fn klass_debug_derive(input: TokenStream) -> TokenStream {
     unwrap_err!(klass_debug_derive_inner(&ast))
 }
 
-#[proc_macro_derive(ClassParser, attributes(count, constant_pool, constant_index, ahead))]
+#[proc_macro_derive(
+    ClassParser,
+    attributes(count, constant_pool, constant_index, enum_entry)
+)]
 pub fn class_file_parse_derive(input: TokenStream) -> TokenStream {
     let ast = parse_macro_input!(input as Item);
     unwrap_err!(class_file_parse_derive_inner(&ast))
@@ -58,49 +67,11 @@ pub fn base_attribute(attr: TokenStream, item: TokenStream) -> TokenStream {
     unwrap_err!(base_attrubute_inner(&attrs, &mut item_struct))
 }
 
-// struct DefineAttributes {
-//     stmts: Vec<Stmt>,
-// }
-
-// impl Parse for DefineAttributes {
-//     fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
-//         let mut stmts = vec![];
-//         while !input.is_empty() {
-//             stmts.push(input.parse::<Stmt>()?);
-//         }
-//         Ok(Self { stmts })
-//     }
-// }
-// #[proc_macro]
-// pub fn define_attributes(input: TokenStream) -> TokenStream {
-//     let mut stmts = parse_macro_input!(input as DefineAttributes).stmts;
-//     for stmt in stmts.iter_mut() {
-//         if let Stmt::Item(item) = stmt {
-//             if let Item::Struct(item_struct) = item {
-//                 item_struct.attrs.push(parse_quote!(#[base_attribute]));
-//             }
-//         }
-//     }
-
-//     quote! {
-//         #(#stmts)*
-//     }
-//     .into()
-// }
-struct AttributeEnum {
-    idents: Punctuated<Ident, Token![,]>,
-}
-impl Parse for AttributeEnum {
-    fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
-        let idents = Punctuated::<Ident, Token![,]>::parse_terminated(input)?;
-        Ok(AttributeEnum { idents })
-    }
-}
 #[proc_macro]
 pub fn attribute_enum(input: TokenStream) -> TokenStream {
-    let attribute_enum = parse_macro_input!(input as AttributeEnum);
+    let ast = parse_macro_input!(input as build_enum_input::Ast);
 
-    let variants = attribute_enum.idents.iter().map(|ident| {
+    let variants = ast.idents.iter().map(|ident| {
         let attribute_ident = format_ident!("{}Attribute", ident);
         quote! {
             #ident(#attribute_ident)
@@ -108,9 +79,34 @@ pub fn attribute_enum(input: TokenStream) -> TokenStream {
     });
 
     quote! {
+        #[derive(Debug, ClassParser)]
+        #[enum_entry(index(constant_pool[u16]))]
         pub enum Attribute {
             #(#variants),*
         }
     }
     .into()
+}
+
+#[proc_macro]
+pub fn impl_class_parser_for_vec(input: TokenStream) -> TokenStream {
+    let ty = parse_macro_input!(input as Type);
+    unwrap_err!(impl_class_parser_for_vec_inner(&ty))
+}
+
+#[proc_macro]
+pub fn define_constants(input: TokenStream) -> TokenStream {
+    let mut ast = parse_macro_input!(input as define_constants::Ast);
+    define_constants_inner(&mut ast.structs).into()
+}
+#[proc_macro]
+pub fn constant_enum(input: TokenStream) -> TokenStream {
+    let ast = parse_macro_input!(input as build_enum_input::Ast);
+    constant_enum_inner(&ast).into()
+}
+#[proc_macro_attribute]
+pub fn constant(attr: TokenStream, input: TokenStream) -> TokenStream {
+    let attr = parse_macro_input!(attr as constant::Attr);
+    let mut item_struct = parse_macro_input!(input as ItemStruct);
+    constant_inner(&attr, &mut item_struct).into()
 }

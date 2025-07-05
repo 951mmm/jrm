@@ -1,9 +1,11 @@
 use convert_case::{Case, Casing};
-use quote::{ToTokens, format_ident, quote};
+use quote::{format_ident, quote};
 use syn::{
-    Field, Fields, Ident, ItemStruct, Token, Type, TypePath, parenthesized, parse::Parse,
-    parse_quote, punctuated::Punctuated,
+    Field, Fields, Ident, ItemStruct, Token, Type, parenthesized, parse::Parse, parse_quote,
+    punctuated::Punctuated,
 };
+
+use crate::utils::try_extract_outer_ty_string;
 pub struct Attrs {
     suffix: Option<(Ident, Type)>,
     bytes: bool,
@@ -70,9 +72,9 @@ pub fn base_attrubute_inner(
         }
         new_named.extend(field_named.named.clone());
         if let Some((count_ident, list_ty)) = &attrs.suffix {
-            let list_ty_snake = get_ty_string(list_ty)?
-                .from_case(Case::Camel)
-                .to_case(Case::Snake);
+            let list_ty_lit = try_extract_outer_ty_string(list_ty)?;
+            let is_lit_attribute = is_lit_attribute(&list_ty_lit);
+            let list_ty_snake = list_ty_lit.from_case(Case::Camel).to_case(Case::Snake);
             let list_ident = format_ident!("{}s", list_ty_snake);
             new_named.push(parse_quote!(
                 #[count(set)]
@@ -83,6 +85,10 @@ pub fn base_attrubute_inner(
                     #[count(get_bytes)]
                     pub #list_ident: Vec<#list_ty>
                 )
+            } else if is_lit_attribute {
+                quote! {
+                    pub #list_ident: Vec<#list_ty>
+                }
             } else {
                 quote!(
                     #[count(get)]
@@ -97,19 +103,27 @@ pub fn base_attrubute_inner(
         #item_struct
     })
 }
-fn get_ty_string(ty: &Type) -> syn::Result<String> {
-    let err = Err(syn::Error::new_spanned(
-        ty,
-        format_args!("failed to parse ty: {}", ty.to_token_stream()),
-    ));
-    match ty {
-        Type::Path(TypePath { path, .. }) => {
-            if let Some(segment) = path.segments.last() {
-                Ok(segment.ident.to_string())
-            } else {
-                err
-            }
-        }
-        _ => err,
+fn is_lit_attribute(ty_lit: &str) -> bool {
+    if ty_lit == "Attribute" {
+        return true;
+    }
+    false
+}
+
+#[cfg(test)]
+mod tests {
+    use std::error::Error;
+
+    use syn::{Type, parse_quote};
+
+    use crate::base_attribbute::{is_lit_attribute, try_extract_outer_ty_string};
+
+    #[test]
+    fn test_is_lit_attribute() -> Result<(), Box<dyn Error>> {
+        let ty_true: Type = parse_quote!(Attribute);
+        let ty_false: Type = parse_quote!(OtherType);
+        assert!(is_lit_attribute(&try_extract_outer_ty_string(&ty_true)?));
+        assert!(!is_lit_attribute(&try_extract_outer_ty_string(&ty_false)?));
+        Ok(())
     }
 }

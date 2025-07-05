@@ -13,6 +13,7 @@ name = "base-macro"
 version = "0.1.0"
 dependencies = [
  "convert_case",
+ "macro-utils",
  "proc-macro2",
  "quote",
  "syn",
@@ -40,6 +41,7 @@ dependencies = [
  "anyhow",
  "dotenvy",
  "jrm-macro",
+ "maplit",
 ]
 
 [[package]]
@@ -48,8 +50,34 @@ version = "0.1.0"
 dependencies = [
  "base-macro",
  "convert_case",
+ "macro-utils",
  "proc-macro2",
  "quote",
+ "syn",
+]
+
+[[package]]
+name = "macro-utils"
+version = "0.1.0"
+dependencies = [
+ "prettyplease",
+ "proc-macro2",
+ "syn",
+]
+
+[[package]]
+name = "maplit"
+version = "1.0.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3e2e65a1a2e43cfcb47a895c4c8b10d1f4a61097f9f254f183aee60cad9c651d"
+
+[[package]]
+name = "prettyplease"
+version = "0.2.35"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "061c1221631e079b26479d25bbf2275bfe5917ae8419cd7e34f13bfc2aa7539a"
+dependencies = [
+ "proc-macro2",
  "syn",
 ]
 

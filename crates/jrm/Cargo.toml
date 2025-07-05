@@ -7,3 +7,4 @@ edition = "2024"
 anyhow = { workspace = true }
 dotenvy = { workspace = true }
 jrm-macro = { path = "../jrm-macro" }
+maplit = "1.0.2"
