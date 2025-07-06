@@ -2,16 +2,16 @@ use quote::quote;
 use syn::{Fields, Ident, ItemStruct, parse::Parse, parse_quote};
 
 #[derive(Default)]
-pub struct Attr {
+pub struct Attrs {
     one_word: bool,
     two_words: bool,
     __ref: bool,
     dynamic: bool,
     module: bool,
 }
-impl Parse for Attr {
+impl Parse for Attrs {
     fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
-        let mut attr: Attr = Default::default();
+        let mut attr: Attrs = Default::default();
         let ident: Ident = input.parse()?;
         match ident.to_string().as_str() {
             "one_word" => attr.one_word = true,
@@ -27,7 +27,7 @@ impl Parse for Attr {
         Ok(attr)
     }
 }
-pub fn constant_inner(attr: &Attr, item_struct: &mut ItemStruct) -> proc_macro2::TokenStream {
+pub fn constant_inner(attr: &Attrs, item_struct: &mut ItemStruct) -> proc_macro2::TokenStream {
     let one_word_field = parse_quote!(pub bytes: u32);
     let two_words_fields = [
         parse_quote!(pub high_bytes: u32),
@@ -108,10 +108,6 @@ mod tests {
     #[test]
     fn test_constant_attr_module_expand() {
         let (raw_code, expanded) = expand_attr(parse_quote!(module));
-        let attr_module: constant::Attr = parse_quote!(module);
-        let mut __struct = generate_struct();
-        let expanded = constant_inner(&attr_module, &mut __struct);
-        let raw_code = expanded.to_string();
         assert!(raw_code.contains("pub name_index : u16"));
         print_expanded_fmt(expanded);
     }
@@ -120,7 +116,7 @@ mod tests {
             struct TestStruct {}
         )
     }
-    fn expand_attr(attr: constant::Attr) -> (String, proc_macro2::TokenStream) {
+    fn expand_attr(attr: constant::Attrs) -> (String, proc_macro2::TokenStream) {
         let mut __struct = generate_struct();
         let expanded = constant_inner(&attr, &mut __struct);
         let raw_code = expanded.to_string();
@@ -129,6 +125,6 @@ mod tests {
     #[test]
     #[should_panic(expected = "invalid attr count")]
     fn test_constant_attr_count_err() {
-        let _attrs: constant::Attr = parse_quote!(module, __ref);
+        let _attrs: constant::Attrs = parse_quote!(module, __ref);
     }
 }

@@ -47,10 +47,17 @@ fn resolve_enum(item_enum: &ItemEnum) -> syn::Result<proc_macro2::TokenStream> {
             let expr = get_match_arms(fields, ident, variant_ident, &lit)?;
             arm_expr.push(expr);
         }
+
+        let debug_token_stream = if cfg!(feature = "debug") {
+            quote! {println!("enum is: {}, index is: {}",stringify!(#ident), index);}
+        } else {
+            quote! {}
+        };
         return Ok(quote! {
             impl ClassParser for #ident {
                 fn parse(class_reader: &mut ClassReader, ctx: &mut ParserContext) -> anyhow::Result<Self> {
                     let index = <#index_ty as ClassParser>::parse(class_reader, ctx)?;
+                    #debug_token_stream
                     ctx.enum_entry = Box::new(index);
                     let choice: String = ContextIndex::get(&ctx.#map_ident, index)?;
                     let result = match choice.as_str() {
@@ -76,14 +83,21 @@ fn get_match_arms(
     let constructor = quote! {#enum_ident::#variant_ident};
     let mut temp_idents = vec![];
     let mut parse_stmts = vec![];
+
     match fields {
         Fields::Unnamed(fields_unnamed) => {
             for (index, field) in (&fields_unnamed.unnamed).into_iter().enumerate() {
                 let field_ty = &field.ty;
-
                 let temp_ident = format_ident!("temp_{}", index);
+
+                let debug_token_stream = if cfg!(feature = "debug") {
+                    quote! {println!("val is: {:?}", #temp_ident);}
+                } else {
+                    quote! {}
+                };
                 let stmt = quote! {
                     let #temp_ident = <#field_ty as ClassParser>::parse(class_reader, ctx)?;
+                    #debug_token_stream
                 };
                 temp_idents.push(temp_ident);
                 parse_stmts.push(stmt);
@@ -237,7 +251,7 @@ enum ConstantIndex {
 enum Count {
     Set,
     Get,
-    GetBytes,
+    Impled,
 }
 // #[attr_enum]
 enum EnumEntry {

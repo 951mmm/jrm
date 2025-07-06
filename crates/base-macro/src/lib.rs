@@ -62,7 +62,7 @@ fn syn_err_inner(ast: &SynErr) -> proc_macro2::TokenStream {
         }
         None => {
             quote! {
-                return Err(syn::Error::new_spanned(proc_macro2::Span::call_site(), #msg))
+                return Err(syn::Error::new(proc_macro2::Span::mixed_site(), #msg))
             }
         }
     }
@@ -143,8 +143,7 @@ pub fn attr_enum(_attr: TokenStream, input: TokenStream) -> TokenStream {
 
 #[cfg(test)]
 mod tests {
-    
-    
+
     use syn::parse_quote;
 
     use crate::{SynErr, syn_err_inner};

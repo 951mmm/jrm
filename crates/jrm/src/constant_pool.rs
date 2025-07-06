@@ -89,7 +89,7 @@ define_constants! {
     pub struct ConstantUtf8 {
         #[count(set)]
         pub length: u16,
-        #[count(get_bytes)]
+        #[count(impled)]
         pub bytes: Vec<u8>,
     }
     #[constant(one_word)]

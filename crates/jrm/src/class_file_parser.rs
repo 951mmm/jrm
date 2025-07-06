@@ -67,6 +67,7 @@ pub trait ClassParser {
 }
 
 generate_ux! {}
+
 impl ClassParser for i32 {
     fn parse(class_reader: &mut ClassReader, _: &mut ParserContext) -> anyhow::Result<Self>
     where
@@ -139,10 +140,10 @@ pub struct InstanceKlass {
     methods_count: u16,
     #[count(get)]
     methods: Vec<Method>,
-    // #[count(set)]
-    // attributes_count: u16,
-    // #[count(get)]
-    // attributes: Vec<Attribute>,
+    #[count(set)]
+    attributes_count: u16,
+    #[count(impled)]
+    attributes: Vec<Attribute>,
 }
 type Interface = ConstantClass;
 #[derive(Debug, ClassParser)]
@@ -158,5 +159,6 @@ pub struct Property {
     descriptor_index: u16,
     #[count(set)]
     attributes_count: u16,
+    #[count(impled)]
     attributes: Vec<Attribute>,
 }

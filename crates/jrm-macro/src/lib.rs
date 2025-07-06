@@ -1,4 +1,4 @@
-mod base_attribbute;
+mod base_attribute;
 mod build_enum_input;
 mod class_parser;
 mod constant;
@@ -14,7 +14,7 @@ use syn::{DeriveInput, Ident, Item, ItemStruct, Type, parse_macro_input, parse_q
 
 use base_macro::unwrap_err;
 
-use crate::base_attribbute::base_attrubute_inner;
+use crate::base_attribute::base_attrubute_inner;
 use crate::class_parser::class_file_parse_derive_inner;
 use crate::constant::constant_inner;
 use crate::constant_enum::constant_enum_inner;
@@ -62,7 +62,7 @@ pub fn class_file_parse_derive(input: TokenStream) -> TokenStream {
 
 #[proc_macro_attribute]
 pub fn base_attribute(attr: TokenStream, item: TokenStream) -> TokenStream {
-    let attrs = parse_macro_input!(attr as base_attribbute::Attrs);
+    let attrs = parse_macro_input!(attr as base_attribute::Attrs);
     let mut item_struct = parse_macro_input!(item as ItemStruct);
     unwrap_err!(base_attrubute_inner(&attrs, &mut item_struct))
 }
@@ -106,7 +106,7 @@ pub fn constant_enum(input: TokenStream) -> TokenStream {
 }
 #[proc_macro_attribute]
 pub fn constant(attr: TokenStream, input: TokenStream) -> TokenStream {
-    let attr = parse_macro_input!(attr as constant::Attr);
+    let attr = parse_macro_input!(attr as constant::Attrs);
     let mut item_struct = parse_macro_input!(input as ItemStruct);
     constant_inner(&attr, &mut item_struct).into()
 }

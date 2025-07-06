@@ -13,3 +13,6 @@ proc-macro2 = { workspace = true }
 convert_case = { workspace = true }
 base-macro = { path = "../base-macro" }
 macro-utils = { path = "../macro-utils" }
+[features]
+default = []
+debug = []
