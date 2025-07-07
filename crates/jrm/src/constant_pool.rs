@@ -1,7 +1,6 @@
 use std::fmt::Debug;
 
 use crate::class_file_parser::{ClassParser, ContextIndex, ParserContext};
-use crate::class_reader::ClassReader;
 use anyhow::bail;
 use jrm_macro::{ClassParser, constant, constant_enum, define_constants};
 

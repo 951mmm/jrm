@@ -8,12 +8,12 @@ pub fn impl_class_parser_for_vec_inner(ty: &Type) -> syn::Result<proc_macro2::To
     let result = if ty_lit == "u8" {
         quote! {
             impl ClassParser for Vec<#ty> {
-                fn parse(class_reader: &mut ClassReader, ctx: &mut ParserContext) -> anyhow::Result<Self>
+                fn parse(ctx: &mut ParserContext) -> anyhow::Result<Self>
                 where
                     Self: Sized,
                 {
                     let size = ctx.count;
-                    let bytes = class_reader.read_bytes(size).unwrap_or_default();
+                    let bytes = ctx.class_reader.read_bytes(size).unwrap_or_default();
                     Ok(bytes)
                 }
             }
@@ -21,11 +21,11 @@ pub fn impl_class_parser_for_vec_inner(ty: &Type) -> syn::Result<proc_macro2::To
     } else {
         quote! {
             impl ClassParser for Vec<#ty> {
-                fn parse(class_reader: &mut ClassReader, ctx: &mut ParserContext) -> anyhow::Result<Self> {
+                fn parse(ctx: &mut ParserContext) -> anyhow::Result<Self> {
                     let size = ctx.count.clone();
                     let mut collection = Vec::with_capacity(size);
                     for _ in 0..size {
-                        let item = <#ty as ClassParser>::parse(class_reader, ctx)?;
+                        let item = <#ty as ClassParser>::parse(ctx)?;
                         collection.push(item);
                     }
                     Ok(collection)

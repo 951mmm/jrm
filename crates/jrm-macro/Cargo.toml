@@ -7,6 +7,9 @@ edition = "2024"
 proc-macro = true
 
 [dependencies]
+# 可以使用Ident表示Type
+# 支持derive_syn_parse
+darling = { git = "https://github.com/TedDriggs/darling", rev = "aff17ba27f931ccf984eb55683f6f376ba77791d" }
 syn = { workspace = true, features = ["full"] }
 quote = { workspace = true }
 proc-macro2 = { workspace = true }

@@ -32,8 +32,8 @@ pub fn generate_ux(_: TokenStream) -> TokenStream {
     let parse_stmts = parse_expr.iter().map(|(call, ty)| {
         quote! {
             impl ClassParser for #ty {
-                fn parse(class_reader: &mut ClassReader, _: &mut ParserContext) -> anyhow::Result<Self> {
-                    Ok(class_reader.#call().unwrap_or(0))
+                fn parse(ctx: &mut ParserContext) -> anyhow::Result<Self> {
+                    Ok(ctx.class_reader.#call().unwrap_or(0))
                 }
             }
         }

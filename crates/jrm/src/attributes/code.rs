@@ -1,12 +1,9 @@
-use crate::class_file_parser::{ClassParser, ContextIndex, ParserContext};
-use crate::class_reader::ClassReader;
-use jrm_macro::{ClassParser, attribute_enum, base_attribute, impl_class_parser_for_vec};
+use crate::class_file_parser::{ClassParser, ParserContext};
+use jrm_macro::{ClassParser, base_attribute};
 
-attribute_enum! {Code, LineNumberTable, LocalVariableTable}
-impl_class_parser_for_vec! {Attribute}
+use super::Attribute;
 
-// FIXME 注意宏的作用顺序
-#[base_attribute(suffix(attributes_count, Attribute), impled)]
+#[base_attribute(suffix(count_ident = attributes_count, item_ty = Attribute), impled)]
 #[derive(Debug, ClassParser)]
 pub struct CodeAttribute {
     pub max_stack: u16,
@@ -20,6 +17,7 @@ pub struct CodeAttribute {
     #[count(get)]
     pub exception_table: Vec<Exception>,
 }
+
 #[derive(Debug, ClassParser)]
 pub struct Exception {
     start_pc: u16,
@@ -28,7 +26,7 @@ pub struct Exception {
     catch_type: u16,
 }
 
-#[base_attribute(suffix(line_number_table_length, LineNumber, rename(line_number_table)))]
+#[base_attribute(suffix(count_ident = line_number_table_length, item_ty = LineNumber, rename = line_number_table))]
 #[derive(Debug, ClassParser)]
 pub struct LineNumberTableAttribute {}
 #[derive(Debug, ClassParser)]
@@ -38,12 +36,13 @@ pub struct LineNumber {
 }
 
 #[base_attribute(suffix(
-    local_variable_table_length,
-    LocalVariable,
-    rename(lcoal_variable_table)
+    count_ident = local_variable_table_length,
+    item_ty = LocalVariable,
+    rename = lcoal_variable_table
 ))]
 #[derive(Debug, ClassParser)]
 pub struct LocalVariableTableAttribute {}
+
 #[derive(Debug, ClassParser)]
 pub struct LocalVariable {
     pub start_pc: u16,
@@ -52,3 +51,9 @@ pub struct LocalVariable {
     pub description_index: u16,
     pub index: u16,
 }
+
+// #[base_attribute(suffix(number_of_entries, StackMapFrame, rename(entries)))]
+// #[derive(Debug, ClassParser)]
+// pub struct StackMapTableAttribute {}
+
+// #[derive(Debug, StackMapFrame)]

@@ -1,10 +1,28 @@
 use std::{fs::File, io::Read, vec};
 
+#[derive(Default)]
 pub struct ClassReader {
     buffer: Vec<u8>,
     cur: usize,
 }
 
+impl From<String> for ClassReader {
+    fn from(value: String) -> Self {
+        Self {
+            buffer: value.as_bytes().into(),
+            cur: 0,
+        }
+    }
+}
+
+impl From<Vec<u8>> for ClassReader {
+    fn from(value: Vec<u8>) -> Self {
+        Self {
+            buffer: value,
+            cur: 0,
+        }
+    }
+}
 impl ClassReader {
     pub fn read_path(path: String) -> anyhow::Result<ClassReader> {
         println!("path is: {}", path);

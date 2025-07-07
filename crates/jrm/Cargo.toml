@@ -6,5 +6,7 @@ edition = "2024"
 [dependencies]
 anyhow = { workspace = true }
 dotenvy = { workspace = true }
-jrm-macro = { path = "../jrm-macro", features = ["debug"] }
 maplit = "1.0.2"
+bpaf = { version = "0.9.20", features = ["derive"] }
+jrm-macro = { path = "../jrm-macro", features = ["debug"] }
+rust-embed = "8.7.2"

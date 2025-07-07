@@ -55,8 +55,8 @@ fn resolve_enum(item_enum: &ItemEnum) -> syn::Result<proc_macro2::TokenStream> {
         };
         return Ok(quote! {
             impl ClassParser for #ident {
-                fn parse(class_reader: &mut ClassReader, ctx: &mut ParserContext) -> anyhow::Result<Self> {
-                    let index = <#index_ty as ClassParser>::parse(class_reader, ctx)?;
+                fn parse(ctx: &mut ParserContext) -> anyhow::Result<Self> {
+                    let index = <#index_ty as ClassParser>::parse(ctx)?;
                     #debug_token_stream
                     ctx.enum_entry = Box::new(index);
                     let choice: String = ContextIndex::get(&ctx.#map_ident, index)?;
@@ -96,7 +96,7 @@ fn get_match_arms(
                     quote! {}
                 };
                 let stmt = quote! {
-                    let #temp_ident = <#field_ty as ClassParser>::parse(class_reader, ctx)?;
+                    let #temp_ident = <#field_ty as ClassParser>::parse(ctx)?;
                     #debug_token_stream
                 };
                 temp_idents.push(temp_ident);
@@ -138,7 +138,7 @@ fn resolve_named(
         let is_set_constant_pool = attr_constant_pool(field)?.eq(&ConstantPool::Set);
 
         let mut stmt = quote! {
-            let #field_ident = <#field_ty as ClassParser>::parse(class_reader, ctx)?;
+            let #field_ident = <#field_ty as ClassParser>::parse(ctx)?;
         };
 
         if let EnumEntry::Get = enum_entry {
@@ -185,7 +185,7 @@ fn resolve_named(
 
     Ok(quote! {
         impl ClassParser for #struct_ident {
-            fn parse(class_reader: &mut ClassReader, ctx: &mut ParserContext) -> anyhow::Result<Self> {
+            fn parse(ctx: &mut ParserContext) -> anyhow::Result<Self> {
                 #(#parse_stmts)*
                 Ok(Self {
                     #(#field_idents,)*
@@ -211,7 +211,7 @@ fn resolve_unnamed(
         let is_get_count = attr_count(field)?.eq(&Count::Get);
         let is_constant_pool_read_mode = attr_constant_pool(field)?.eq(&ConstantPool::Read);
         let stmt = quote! {
-            let #temp_ident = <#field_ty as ClassParser>::parse(class_reader, ctx)?;
+            let #temp_ident = <#field_ty as ClassParser>::parse(ctx)?;
         };
 
         if is_get_count {
@@ -225,7 +225,7 @@ fn resolve_unnamed(
     }
     let result = quote! {
         impl ClassParser for #struct_ident {
-            fn parse(class_reader: &mut ClassReader, ctx: &mut ParserContext) -> anyhow::Result<Self> {
+            fn parse(ctx: &mut ParserContext) -> anyhow::Result<Self> {
                 #(#parse_stmts)*
                 Ok(#struct_ident(#(#temp_idents),*))
             }
@@ -303,7 +303,7 @@ fn resolve_collection_impl(
             let invalid = Constant::Invalid;
             collection.push(invalid);
             for _ in 0..size-1 {
-                let item = <#inner_ty as ClassParser>::parse(class_reader, ctx)?;
+                let item = <#inner_ty as ClassParser>::parse(ctx)?;
                 collection.push(item);
             }
             return Ok(collection);
@@ -313,7 +313,7 @@ fn resolve_collection_impl(
         quote! {
             let mut collection = #collection_ident::with_capacity(size);
             for _ in 0..size {
-                let item = <#inner_ty as ClassParser>::parse(class_reader, ctx)?;
+                let item = <#inner_ty as ClassParser>::parse(ctx)?;
                 collection.push(item);
             }
             return Ok(collection);
@@ -321,7 +321,7 @@ fn resolve_collection_impl(
     };
     Ok(quote! {
         impl ClassParser for #collection_ty {
-            fn parse(class_reader: &mut ClassReader, ctx: &mut ParserContext) -> anyhow::Result<Self> {
+            fn parse(ctx: &mut ParserContext) -> anyhow::Result<Self> {
                 let size = ctx.count.clone();
                 #stmts
             }

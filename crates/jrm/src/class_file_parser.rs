@@ -21,6 +21,7 @@ impl ContextIndex for HashMap<u8, &'static str> {
     }
 }
 pub struct ParserContext {
+    pub class_reader: ClassReader,
     pub count: usize,
     pub constant_index_range: Range<u16>,
     pub constant_pool: ConstantPool,
@@ -29,7 +30,7 @@ pub struct ParserContext {
 }
 
 impl ParserContext {
-    pub fn new() -> Self {
+    pub fn new(class_reader: ClassReader) -> Self {
         let constant_tag_map = hashmap! {
             0 => "Invalid",
             1 => "Utf8",
@@ -51,6 +52,7 @@ impl ParserContext {
             20 => "Package",
         };
         Self {
+            class_reader,
             count: Default::default(),
             constant_index_range: Default::default(),
             constant_pool: Default::default(),
@@ -61,7 +63,7 @@ impl ParserContext {
 }
 
 pub trait ClassParser {
-    fn parse(class_reader: &mut ClassReader, ctx: &mut ParserContext) -> anyhow::Result<Self>
+    fn parse(ctx: &mut ParserContext) -> anyhow::Result<Self>
     where
         Self: Sized;
 }
@@ -69,41 +71,41 @@ pub trait ClassParser {
 generate_ux! {}
 
 impl ClassParser for i32 {
-    fn parse(class_reader: &mut ClassReader, _: &mut ParserContext) -> anyhow::Result<Self>
+    fn parse(ctx: &mut ParserContext) -> anyhow::Result<Self>
     where
         Self: Sized,
     {
-        let num = class_reader.read_four_bytes().unwrap_or(0);
+        let num = ctx.class_reader.read_four_bytes().unwrap_or(0);
         Ok(num as i32)
     }
 }
 impl ClassParser for f32 {
-    fn parse(class_reader: &mut ClassReader, _: &mut ParserContext) -> anyhow::Result<Self>
+    fn parse(ctx: &mut ParserContext) -> anyhow::Result<Self>
     where
         Self: Sized,
     {
-        let num = class_reader.read_four_bytes().unwrap_or(0);
+        let num = ctx.class_reader.read_four_bytes().unwrap_or(0);
         Ok(f32::from_bits(num))
     }
 }
 impl ClassParser for i64 {
-    fn parse(class_reader: &mut ClassReader, _: &mut ParserContext) -> anyhow::Result<Self>
+    fn parse(ctx: &mut ParserContext) -> anyhow::Result<Self>
     where
         Self: Sized,
     {
-        let high = class_reader.read_four_bytes().unwrap_or(0) as u64;
-        let low = class_reader.read_four_bytes().unwrap_or(0) as u64;
+        let high = ctx.class_reader.read_four_bytes().unwrap_or(0) as u64;
+        let low = ctx.class_reader.read_four_bytes().unwrap_or(0) as u64;
         let num = (high << 32) | low;
         Ok(num as i64)
     }
 }
 impl ClassParser for f64 {
-    fn parse(class_reader: &mut ClassReader, _: &mut ParserContext) -> anyhow::Result<Self>
+    fn parse(ctx: &mut ParserContext) -> anyhow::Result<Self>
     where
         Self: Sized,
     {
-        let high = class_reader.read_four_bytes().unwrap_or(0) as u64;
-        let low = class_reader.read_four_bytes().unwrap_or(0) as u64;
+        let high = ctx.class_reader.read_four_bytes().unwrap_or(0) as u64;
+        let low = ctx.class_reader.read_four_bytes().unwrap_or(0) as u64;
         let num = (high << 32) | low;
         Ok(f64::from_bits(num))
     }

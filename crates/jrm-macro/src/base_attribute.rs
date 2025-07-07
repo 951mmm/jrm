@@ -1,114 +1,109 @@
 use base_macro::syn_err;
 use convert_case::{Case, Casing};
+use darling::{FromMeta, util::Flag};
 use quote::{format_ident, quote};
 use syn::{
-    Field, Fields, Ident, ItemStruct, Token, Type, parenthesized, parse::Parse, parse_quote,
-    punctuated::Punctuated,
+    Field, Fields, Ident, ItemStruct, Token, Type, TypePath,
+    parse_quote, punctuated::Punctuated,
 };
 
 use crate::utils::try_extract_outer_ty_string;
+#[derive(Debug, FromMeta)]
+#[darling(derive_syn_parse)]
 pub struct Attrs {
-    suffix: Option<(Ident, Option<Type>, Option<Ident>)>,
-    impled: bool,
+    #[darling(default)]
+    suffix: Option<AttrSuffix>,
+    #[darling(default)]
+    single: Option<AttrSingle>,
+    #[darling(default)]
+    impled: Flag,
 }
 
-impl Parse for Attrs {
-    fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
-        let mut suffix = None;
-        let mut bytes = false;
-
-        let attrs = Punctuated::<Attr, Token![,]>::parse_terminated(input)?;
-        for attr in attrs {
-            match attr {
-                Attr::Suffix {
-                    count_ident,
-                    item_ty,
-                    rename,
-                } => {
-                    suffix = Some((count_ident, item_ty, rename));
-                }
-                Attr::Impled => bytes = true,
-            }
-        }
-
-        Ok(Attrs {
-            suffix,
-            impled: bytes,
-        })
-    }
+#[derive(Debug, FromMeta)]
+struct AttrSuffix {
+    count_ident: Ident,
+    #[darling(default)]
+    item_ty: Option<TypePath>,
+    #[darling(default)]
+    rename: Option<Ident>,
 }
-enum Attr {
-    Suffix {
-        count_ident: Ident,
-        item_ty: Option<Type>,
-        rename: Option<Ident>,
-    },
-    Impled,
-}
-impl Parse for Attr {
-    fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
-        let attr_ident: &Ident = &input.parse()?;
 
-        match attr_ident.to_string().as_str() {
-            "suffix" => {
-                let content;
-                parenthesized!(content in input);
-                let count_ident: Ident = content.parse()?;
-                let mut item_ty = None;
-                if content.peek(Token![,]) {
-                    content.parse::<Token![,]>()?;
-                    let ty: Type = content.parse()?;
-                    item_ty = Some(ty);
-                }
-                let mut rename = None;
-                if content.peek(Token![,]) {
-                    content.parse::<Token![,]>()?;
-                    let ident: Ident = content.parse()?;
-                    if ident != "rename" {
-                        return Err(
-                            input.error("invalid attr, last attr should be `rename` or not")
-                        );
-                    }
-                    let content_inner;
-                    parenthesized!(content_inner in content);
-                    let rename_ident: Ident = content_inner.parse()?;
-                    rename = Some(rename_ident);
-                }
-                Ok(Attr::Suffix {
-                    count_ident,
-                    item_ty,
-                    rename,
-                })
-            }
-            "impled" => Ok(Attr::Impled),
-            _ => Err(input.error(format_args!("unsurpport attr: {}", attr_ident))),
-        }
-    }
+#[derive(Debug, FromMeta)]
+struct AttrSingle {
+    ident: Ident,
+    ty: TypePath,
+    #[darling(default)]
+    constant_index_check: Flag,
 }
 
 pub fn base_attrubute_inner(
     attrs: &Attrs,
     item_struct: &mut ItemStruct,
 ) -> syn::Result<proc_macro2::TokenStream> {
-    let base_fields_prefix = [
-        quote! {#[enum_entry(get)] pub attribute_name_index: u16},
-        quote! {pub attribute_length: u32},
-    ];
+    let index_field_prefix: Field =
+        parse_quote! {#[enum_entry(get)] #[constant_index(check)] pub attribute_name_index: u16};
+    let length_field_prefix: Field = parse_quote! {pub attribute_length: u32};
     if let Fields::Named(ref mut field_named) = item_struct.fields {
         let mut new_named: Punctuated<Field, Token![,]> = Punctuated::new();
-        for base_field in base_fields_prefix {
-            new_named.push(parse_quote!(#base_field));
-        }
-        new_named.extend(field_named.named.clone());
-        if let Some((count_ident, item_ty, rename)) = &attrs.suffix {
+        new_named.push(index_field_prefix);
+        let is_impled = attrs.impled.is_present();
+        if let Some(AttrSuffix {
+            count_ident,
+            item_ty,
+            rename,
+        }) = &attrs.suffix
+        {
+            new_named.push(length_field_prefix);
+            new_named.extend(field_named.named.clone());
             new_named.push(parse_quote!(#[count(set)] #count_ident: u16));
 
-            let is_impled = attrs.impled;
             let list_ident = get_suffix_list_ident(is_impled, rename.clone(), item_ty)?;
             let list_field = get_suffix_list_field(is_impled, &list_ident, item_ty)?;
             new_named.push(parse_quote!(#list_field));
-            field_named.named = new_named;
+        } else if let Some(AttrSingle {
+            ident,
+            ty,
+            constant_index_check,
+        }) = &attrs.single
+        {
+            let is_collection_ty = is_collection_ty(ty);
+            let ty = build_ty_from(ty);
+            let length_field_prefix = if is_collection_ty {
+                parse_quote!(
+                    #[count(set)]
+                    #length_field_prefix
+                )
+            } else {
+                length_field_prefix
+            };
+            new_named.push(length_field_prefix);
+            let single_suffix_field = if constant_index_check.is_present() {
+                parse_quote!(
+                    #[constant_index(check)]
+                    #ident: #ty
+                )
+            } else if is_collection_ty {
+                if is_impled {
+                    parse_quote!(
+                        #[count(impled)]
+                        #ident: #ty
+                    )
+                } else {
+                    parse_quote!(
+                        #[count(get)]
+                        #ident: #ty
+                    )
+                }
+            } else {
+                parse_quote!(
+                    #ident: #ty
+                )
+            };
+            new_named.push(single_suffix_field);
+        } else {
+            new_named.push(length_field_prefix);
         }
+        field_named.named = new_named;
     }
 
     Ok(quote! {
@@ -119,7 +114,7 @@ pub fn base_attrubute_inner(
 fn get_suffix_list_ident(
     is_impled: bool,
     rename: Option<Ident>,
-    item_ty: &Option<Type>,
+    item_ty: &Option<TypePath>,
 ) -> syn::Result<Ident> {
     let result = match rename {
         Some(rename_ident) => rename_ident,
@@ -127,7 +122,7 @@ fn get_suffix_list_ident(
             if is_impled {
                 match item_ty {
                     Some(item_ty) => {
-                        let outer_ty_string = try_extract_outer_ty_string(item_ty)?;
+                        let outer_ty_string = try_extract_outer_ty_string(&build_ty_from(item_ty))?;
                         let outer_ty_string =
                             outer_ty_string.from_case(Case::Camel).to_case(Case::Snake);
                         format_ident!("{}s", outer_ty_string)
@@ -138,7 +133,9 @@ fn get_suffix_list_ident(
                 if item_ty.is_none() {
                     syn_err!("invalid attr, list type is required without `impled` attr");
                 }
-                let outer_ty_string = try_extract_outer_ty_string(item_ty.as_ref().unwrap())?;
+
+                let outer_ty_string =
+                    try_extract_outer_ty_string(&build_ty_from(item_ty.as_ref().unwrap()))?;
                 let outer_ty_string = outer_ty_string.from_case(Case::Camel).to_case(Case::Snake);
                 format_ident!("{}s", outer_ty_string)
             }
@@ -149,7 +146,7 @@ fn get_suffix_list_ident(
 fn get_suffix_list_field(
     is_impled: bool,
     list_ident: &Ident,
-    item_ty: &Option<Type>,
+    item_ty: &Option<TypePath>,
 ) -> syn::Result<Field> {
     let result = if is_impled {
         match item_ty {
@@ -178,30 +175,44 @@ fn get_suffix_list_field(
     };
     Ok(result)
 }
-// /**
-//  * 判断列表元素的乐星是否为Attribute
-//  */
-// fn is_ty_lit_attribute(ty_lit: &str) -> bool {
-//     if ty_lit == "Attribute" {
-//         return true;
-//     }
-//     false
-// }
+
+fn build_ty_from(ty_path: &TypePath) -> Type {
+    Type::Path(ty_path.clone())
+}
+
+fn is_collection_ty(ty: &TypePath) -> bool {
+    if let Some(segment) = ty.path.segments.last() {
+        if segment.ident == "Vec" {
+            return true;
+        }
+    }
+    false
+}
+
 #[cfg(test)]
 mod tests {
     use std::error::Error;
 
+    
     use macro_utils::print_expanded_fmt;
     use quote::ToTokens;
-    use syn::{Field, ItemStruct, parse_quote};
+    use syn::{Field, ItemStruct, TypePath, parse_quote};
 
     use crate::{
         base_attribute::{
-            Attrs, get_suffix_list_field, get_suffix_list_ident, try_extract_outer_ty_string,
+            AttrSuffix, Attrs, build_ty_from, get_suffix_list_field, get_suffix_list_ident,
+            is_collection_ty, try_extract_outer_ty_string,
         },
         base_attrubute_inner,
     };
+    #[test]
+    fn test_is_collection_ty() {
+        let ty: TypePath = parse_quote!(Vec<i32>);
+        assert!(is_collection_ty(&ty));
 
+        let ty: TypePath = parse_quote!(Attr<Other>);
+        assert!(!is_collection_ty(&ty));
+    }
     #[test]
     fn test_get_suffix_list_ident() -> Result<(), Box<dyn Error>> {
         let is_impled = false;
@@ -241,16 +252,15 @@ mod tests {
 
     #[test]
     fn test_get_suffix_list_field() -> Result<(), Box<dyn Error>> {
-        let results: Vec<_> = [
+        let mut results = [
             "# [count (impled)] some_ident : Vec < SomeType >",
             "# [count (impled)] some_ident : Vec < u8 >",
             "# [count (get)] some_ident : Vec < SomeType >",
             "# [count (get)] some_ident : Vec < Attribute >",
         ]
         .iter()
-        .map(|str| str.to_string())
-        .collect();
-        let mut results = results.into_iter();
+        .map(ToString::to_string);
+        // let mut results = results.into_iter();
 
         let is_impled = true;
         let field_ident = parse_quote!(some_ident);
@@ -288,29 +298,33 @@ mod tests {
     }
     #[test]
     fn test_attrs_parse() -> Result<(), Box<dyn Error>> {
-        let attrs: Attrs = parse_quote!(suffix(count, SomeAttribute));
-        let (count_ident, item_ty, rename) = attrs.suffix.unwrap();
+        let attrs: Attrs = parse_quote!(suffix(count_ident = count, item_ty = SomeAttribute));
+        let AttrSuffix {
+            count_ident,
+            item_ty,
+            rename,
+        } = attrs.suffix.unwrap();
         assert_eq!(count_ident, "count");
-        assert_eq!(
-            try_extract_outer_ty_string(&item_ty.unwrap())?,
-            "SomeAttribute"
-        );
+        let ty = build_ty_from(item_ty.as_ref().unwrap());
+        assert_eq!(try_extract_outer_ty_string(&ty)?, "SomeAttribute");
         assert!(rename.is_none());
 
-        let attrs: Attrs = parse_quote!(suffix(count, SomeAttribute, rename(other_ident)));
-        let rename = attrs.suffix.unwrap().2.unwrap();
+        let attrs: Attrs = parse_quote!(suffix(
+            count_ident = count,
+            item_ty = SomeType,
+            rename = other_ident
+        ));
+        let rename = attrs.suffix.unwrap().rename.unwrap();
         assert_eq!(rename, "other_ident");
 
-        let attrs: Attrs = parse_quote!(suffix(count, SomeType), impled);
-        assert!(attrs.impled);
+        let attrs: Attrs = parse_quote!(suffix(count_ident = count, item_ty = SomeType), impled);
+        assert!(attrs.impled.is_present());
         Ok(())
     }
     #[test]
-    fn test_base_attribute_expand() -> Result<(), Box<dyn Error>> {
-        let attrs = generate_attrs();
-        let mut __struct = generate_struct();
-        let expanded = base_attrubute_inner(&attrs, &mut __struct)?;
-        let raw_code = expanded.to_string();
+    fn test_base_attribute_suffix_expand() -> Result<(), Box<dyn Error>> {
+        let attrs: Attrs = parse_quote!(suffix(count_ident = count, item_ty = SomeAttribute));
+        let (raw_code, expanded) = base_attribute_expand(&attrs)?;
         assert!(raw_code.contains("# [enum_entry (get)]"));
         assert!(raw_code.contains("count : u16"));
         assert!(raw_code.contains("pub attribute_name_index : u16"));
@@ -319,8 +333,27 @@ mod tests {
         print_expanded_fmt(expanded);
         Ok(())
     }
-    fn generate_attrs() -> Attrs {
-        parse_quote!(suffix(count, SomeAttribute))
+    #[test]
+    fn test_base_attribute_single_expand() -> Result<(), Box<dyn Error>> {
+        let attrs: Attrs = parse_quote!(single(ident = some, ty = Some, constant_index_check));
+        let (raw_code, expanded) = base_attribute_expand(&attrs)?;
+        assert!(raw_code.contains("# [constant_index (check)] some : Some"));
+        println!("#1");
+        print_expanded_fmt(expanded);
+
+        let attrs: Attrs = parse_quote!(single(ident = some, ty = "Vec<Some>"));
+        let (raw_code, expanded) = base_attribute_expand(&attrs)?;
+        assert!(raw_code.contains("# [count (set)] pub attribute_length"));
+        assert!(raw_code.contains("# [count (get)]"));
+        println!("#2");
+        print_expanded_fmt(expanded);
+
+        let attrs: Attrs = parse_quote!(single(ident = some, ty = "Vec<Some>"), impled);
+        let (raw_code, expanded) = base_attribute_expand(&attrs)?;
+        assert!(raw_code.contains("# [count (impled)]"));
+        println!("#3");
+        print_expanded_fmt(expanded);
+        Ok(())
     }
     fn generate_struct() -> ItemStruct {
         parse_quote!(
@@ -329,5 +362,12 @@ mod tests {
                 b: u8,
             }
         )
+    }
+
+    fn base_attribute_expand(attrs: &Attrs) -> syn::Result<(String, proc_macro2::TokenStream)> {
+        let mut __struct = generate_struct();
+        let expanded = base_attrubute_inner(attrs, &mut __struct)?;
+        let raw_code = expanded.to_string();
+        Ok((raw_code, expanded))
     }
 }

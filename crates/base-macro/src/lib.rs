@@ -29,6 +29,17 @@ pub fn unwrap_err(input: TokenStream) -> TokenStream {
     }
     .into()
 }
+#[proc_macro]
+pub fn unwrap_darling(input: TokenStream) -> TokenStream {
+    let expr = parse_macro_input!(input as Expr);
+    quote! {
+        match #expr {
+            Ok(tokens) => tokens,
+            Err(err) => return err.write_errors().into(),
+        }
+    }
+    .into()
+}
 struct SynErr {
     pub ident: Option<Ident>,
     pub msg: Lit,
