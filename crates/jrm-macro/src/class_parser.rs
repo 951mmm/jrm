@@ -135,7 +135,9 @@ fn resolve_named(
         let count = attr_count(field)?;
         let constant_index = attr_constant_index(field)?;
         let enum_entry = attr_enum_entry(&field.attrs)?;
+        // NOTE set和read或许不会同时出现。需要包装
         let is_set_constant_pool = attr_constant_pool(field)?.eq(&ConstantPool::Set);
+        let is_constant_pool_read_mode = attr_constant_pool(field)?.eq(&ConstantPool::Read);
         let skip_expr = attr_skip(field)?;
 
         match skip_expr {
@@ -152,7 +154,11 @@ fn resolve_named(
 
                 match count {
                     Count::Get => {
-                        collection_impl_blocks.push(resolve_collection_impl(field_ty, false)?);
+                        if is_constant_pool_read_mode {
+                            collection_impl_blocks.push(resolve_collection_impl(field_ty, true)?);
+                        } else {
+                            collection_impl_blocks.push(resolve_collection_impl(field_ty, false)?);
+                        }
                     }
                     Count::Set => {
                         parse_stmts.push(quote! {
@@ -176,6 +182,7 @@ fn resolve_named(
                     }
                     _ => {}
                 }
+
                 if is_set_constant_pool {
                     parse_stmts.push(quote! {
                         ctx.constant_pool = #field_ident.clone();

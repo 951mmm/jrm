@@ -1,6 +1,6 @@
 use rust_embed::RustEmbed;
 
-use crate::{
+use crate::parse::{
     class_file_parser::{ClassParser, ParserContext},
     class_reader::ClassReader,
     instance_klass::InstanceKlass,

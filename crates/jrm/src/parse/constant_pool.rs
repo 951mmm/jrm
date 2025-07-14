@@ -1,9 +1,7 @@
 use std::{collections::HashMap, fmt::Debug, hint::unreachable_unchecked, ops::Deref, sync::Arc};
 
-use crate::{
-    class_file_parser::{ClassParser, ContextIndex, ParserContext},
-    runtime::Slot,
-};
+use crate::parse::class_file_parser::{ClassParser, ContextIndex, ParserContext};
+use crate::runtime::Slot;
 use anyhow::bail;
 use jrm_macro::{ClassParser, constant, constant_enum, define_constants};
 
@@ -51,6 +49,7 @@ impl ConstantPool {
                 Constant::Float(float) => {
                     self.slot_cache.insert(index as u16, float.bytes.into());
                 }
+                // TODO 完成heap的设计和objref
                 // Constant::String(string) => {
                 //     let ref_index = string.string_index;
                 //     let
@@ -212,7 +211,7 @@ impl From<ConstantUtf8> for String {
 #[cfg(test)]
 mod tests {
 
-    use crate::{
+    use crate::parse::{
         class_file_parser::ContextIndex,
         constant_pool::{Constant, ConstantClass, ConstantPool, ConstantUtf8},
     };

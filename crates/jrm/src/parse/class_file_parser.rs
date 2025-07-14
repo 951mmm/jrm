@@ -9,7 +9,7 @@ use std::{
 use jrm_macro::{ClassParser, KlassDebug, generate_ux, impl_class_parser_for_vec};
 use maplit::hashmap;
 
-use crate::{
+use crate::parse::{
     attributes::Attribute,
     class_reader::ClassReader,
     constant_pool::{ConstantClass, ConstantPool},
@@ -43,8 +43,16 @@ pub struct ParserContext {
     pub enum_entry: Box<dyn Any>,
 }
 
+impl From<Vec<u8>> for ParserContext {
+    fn from(value: Vec<u8>) -> Self {
+        let class_reader = value.into();
+        Self::new(class_reader)
+    }
+}
+
 impl ParserContext {
     pub fn new(class_reader: ClassReader) -> Self {
+        // TODO parser context的静态化
         let constant_tag_map = hashmap! {
             0 => "Invalid",
             1 => "Utf8",

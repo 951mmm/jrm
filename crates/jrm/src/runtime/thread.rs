@@ -1,13 +1,18 @@
-use std::{ops::Index, sync::Arc, usize};
+use std::{
+    ops::Index,
+    sync::{Arc, Mutex},
+    usize,
+};
 
 use jrm_macro::define_instructions;
 
 use crate::{
-    constant_pool::ConstantPool,
+    parse::constant_pool::ConstantPool,
     runtime::{
         Method,
         byte_reader::ByteReader,
         frame::{Frame, LocalVarsLike, OperandStackLike},
+        heap::Heap,
         slot::Slot,
     },
 };
@@ -22,6 +27,7 @@ pub struct Thread {
     stack: Vec<Frame>,
     state: ThreadState,
     constant_pool: Arc<ConstantPool>,
+    heap: Arc<Mutex<Heap>>,
 }
 
 // FIXME trait的可见性问题
@@ -53,7 +59,12 @@ impl ByteReader for Thread {
 }
 
 impl Thread {
-    pub fn new(id: u64, method: Method, constant_pool: Arc<ConstantPool>) -> Self {
+    pub fn new(
+        id: u64,
+        method: Method,
+        constant_pool: Arc<ConstantPool>,
+        heap: Arc<Mutex<Heap>>,
+    ) -> Self {
         let initial_frame = Frame::new(method, 0);
         {
             let constant_pool = constant_pool.clone();
@@ -62,6 +73,7 @@ impl Thread {
                 stack: vec![initial_frame],
                 state: ThreadState::Running,
                 constant_pool: constant_pool,
+                heap,
             }
         }
     }
@@ -123,7 +135,7 @@ mod tests {
     use rstest::{fixture, rstest};
 
     use crate::{
-        constant_pool::{Constant, ConstantPool},
+        parse::constant_pool::{Constant, ConstantPool},
         runtime::{Method, thread::Thread},
     };
 
@@ -139,13 +151,13 @@ mod tests {
             max_stack: 100,
             ..Default::default()
         };
-        let thread = Thread::new(0, method, constant_pool);
+        let thread = Thread::new(0, method, constant_pool, Default::default());
         thread
     }
 
     #[rstest]
     fn test_thread_frame(thread: Thread) {
-        assert_eq!(thread.id, 11);
+        assert_eq!(thread.id, 0);
     }
     #[rstest]
     #[should_panic(expected = "none frame")]

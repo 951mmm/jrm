@@ -1,4 +1,4 @@
-use crate::class_file_parser::{ClassParser, ParserContext};
+use crate::parse::class_file_parser::{ClassParser, ParserContext};
 use jrm_macro::{ClassParser, base_attribute};
 
 use super::Attribute;

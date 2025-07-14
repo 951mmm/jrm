@@ -1,12 +1,6 @@
-mod attributes;
-mod class_file_parser;
-mod class_reader;
-mod constant_pool;
-mod instance_klass;
+mod parse;
 mod runtime;
 mod test_context;
-mod util;
-
 use std::{
     fs,
     io::{self, Read},
@@ -14,7 +8,7 @@ use std::{
 
 use bpaf::{Bpaf, Parser};
 
-use crate::{
+use crate::parse::{
     class_file_parser::{ClassParser, ParserContext},
     class_reader::ClassReader,
     instance_klass::InstanceKlass,

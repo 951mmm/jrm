@@ -2,9 +2,9 @@ use std::sync::Arc;
 
 use bitflags::{Flags, bitflags};
 
-use crate::attributes::Attribute;
-use crate::class_file_parser::{ClassParser, ParserContext};
-use crate::constant_pool::{ConstantClass, ConstantPool};
+use crate::parse::attributes::Attribute;
+use crate::parse::class_file_parser::{ClassParser, ParserContext};
+use crate::parse::constant_pool::{ConstantClass, ConstantPool};
 use crate::runtime::Method as FrameMethod;
 use jrm_macro::{ClassParser, KlassDebug};
 
@@ -172,7 +172,7 @@ pub struct Method {
 
 #[cfg(test)]
 mod tests {
-    use crate::{instance_klass::ClassAccessFlags, test_context::TestContext};
+    use crate::{parse::instance_klass::ClassAccessFlags, test_context::TestContext};
 
     #[test]
     fn test_class_access_flag() {
