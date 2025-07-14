@@ -10,6 +10,14 @@ macro_rules! convert_panic {
         panic!("failed to convert {}", stringify!($ty))
     };
 }
+impl From<Slot> for u32 {
+    fn from(value: Slot) -> Self {
+        match value {
+            Slot::Bits32(bits) => bits,
+            _ => convert_panic!(u32),
+        }
+    }
+}
 impl From<Slot> for i32 {
     fn from(value: Slot) -> Self {
         match value {
@@ -41,6 +49,12 @@ impl From<Slot> for f64 {
             Slot::Bits64(bits) => f64::from_bits(bits),
             _ => convert_panic!(f64),
         }
+    }
+}
+
+impl From<u32> for Slot {
+    fn from(value: u32) -> Self {
+        Slot::Bits32(value)
     }
 }
 

@@ -1,19 +1,24 @@
-use std::{fmt::Debug, hint::unreachable_unchecked, ops::Deref, sync::Arc};
+use std::{collections::HashMap, fmt::Debug, hint::unreachable_unchecked, ops::Deref, sync::Arc};
 
-use crate::class_file_parser::{ClassParser, ContextIndex, ParserContext};
+use crate::{
+    class_file_parser::{ClassParser, ContextIndex, ParserContext},
+    runtime::Slot,
+};
 use anyhow::bail;
 use jrm_macro::{ClassParser, constant, constant_enum, define_constants};
 
 #[derive(ClassParser, Default)]
-pub struct ConstantPool(
+pub struct ConstantPool {
     #[count(get)]
     #[constant_pool(read)]
-    pub Vec<Constant>,
-);
+    pub constants: Vec<Constant>,
+    #[skip(HashMap::new())]
+    slot_cache: HashMap<u16, Slot>,
+}
 impl Debug for ConstantPool {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         writeln!(f)?;
-        for (index, constant_wrapper) in self.0.iter().enumerate() {
+        for (index, constant_wrapper) in self.constants.iter().enumerate() {
             if index == 0 {
                 continue; // Skip index 0 as it is reserved
             }
@@ -30,29 +35,39 @@ impl ContextIndex for ConstantPool {
     }
 }
 
-impl TryFrom<&Constant> for String {
-    type Error = anyhow::Error;
-    fn try_from(value: &Constant) -> Result<Self, Self::Error> {
-        match &value {
-            Constant::Utf8(constant_utf8) => Ok(String::from_utf8(constant_utf8.bytes.clone())?),
-            _ => bail!("constant is not utf8"),
-        }
-    }
-}
-
 impl ConstantPool {
     pub fn get_utf8_string(&self, index: u16) -> String {
-        if let Constant::Utf8(utf8) = self.0[index as usize].clone() {
+        if let Constant::Utf8(utf8) = self.constants[index as usize].clone() {
             return String::from(utf8);
         }
         unsafe { unreachable_unchecked() }
+    }
+    pub fn init_cache(&mut self) {
+        for (index, constant) in self.constants.iter().enumerate() {
+            match constant {
+                Constant::Integer(integer) => {
+                    self.slot_cache.insert(index as u16, integer.bytes.into());
+                }
+                Constant::Float(float) => {
+                    self.slot_cache.insert(index as u16, float.bytes.into());
+                }
+                // Constant::String(string) => {
+                //     let ref_index = string.string_index;
+                //     let
+                // }
+                _ => {}
+            }
+        }
     }
 }
 
 #[cfg(test)]
 impl From<Vec<Constant>> for ConstantPool {
     fn from(value: Vec<Constant>) -> Self {
-        Self(value)
+        Self {
+            constants: value,
+            ..Default::default()
+        }
     }
 }
 // #[derive(Clone, Debug, ClassParser)]
@@ -98,6 +113,17 @@ constant_enum! {
     Module,
     Package
 }
+
+impl TryFrom<&Constant> for String {
+    type Error = anyhow::Error;
+    fn try_from(value: &Constant) -> Result<Self, Self::Error> {
+        match &value {
+            Constant::Utf8(constant_utf8) => Ok(String::from_utf8(constant_utf8.bytes.clone())?),
+            _ => bail!("constant is not utf8"),
+        }
+    }
+}
+
 define_constants! {
     pub struct ConstantUtf8 {
         #[count(set)]
@@ -169,6 +195,7 @@ impl From<String> for ConstantUtf8 {
         }
     }
 }
+
 // impl Debug for ConstantUtf8 {
 //     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 //         let utf8_string = String::from_utf8_lossy(&self.bytes);
@@ -191,17 +218,20 @@ mod tests {
     };
 
     fn test_constant_pool() -> ConstantPool {
-        ConstantPool(vec![
-            Constant::Class(ConstantClass {
-                tag: 2,
-                name_index: 12,
-            }),
-            Constant::Utf8(ConstantUtf8 {
-                tag: 99,
-                length: 4,
-                bytes: "aaaa".bytes().collect(),
-            }),
-        ])
+        ConstantPool {
+            constants: vec![
+                Constant::Class(ConstantClass {
+                    tag: 2,
+                    name_index: 12,
+                }),
+                Constant::Utf8(ConstantUtf8 {
+                    tag: 99,
+                    length: 4,
+                    bytes: "aaaa".bytes().collect(),
+                }),
+            ],
+            ..Default::default()
+        }
     }
     #[test]
     fn test_constant_pool_index() {

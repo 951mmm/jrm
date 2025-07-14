@@ -55,7 +55,7 @@ pub fn klass_debug_derive(input: TokenStream) -> TokenStream {
 
 #[proc_macro_derive(
     ClassParser,
-    attributes(count, constant_pool, constant_index, enum_entry)
+    attributes(count, constant_pool, constant_index, enum_entry, skip)
 )]
 pub fn class_file_parse_derive(input: TokenStream) -> TokenStream {
     let ast = parse_macro_input!(input as Item);

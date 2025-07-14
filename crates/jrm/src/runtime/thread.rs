@@ -6,6 +6,7 @@ use crate::{
     constant_pool::ConstantPool,
     runtime::{
         Method,
+        byte_reader::ByteReader,
         frame::{Frame, LocalVarsLike, OperandStackLike},
         slot::Slot,
     },
@@ -42,6 +43,15 @@ impl LocalVarsLike for Thread {
     }
 }
 
+impl ByteReader for Thread {
+    fn read_u1(&self) -> u8 {
+        self.current_frame().read_u1()
+    }
+    fn read_u2(&self) -> u16 {
+        self.current_frame().read_u2()
+    }
+}
+
 impl Thread {
     pub fn new(id: u64, method: Method, constant_pool: Arc<ConstantPool>) -> Self {
         let initial_frame = Frame::new(method, 0);
@@ -64,6 +74,16 @@ impl Thread {
         debug_assert!(!self.stack.is_empty(), "none frame");
         let len = self.stack.len();
         unsafe { self.stack.get_unchecked(len - 1) }
+    }
+    pub fn run(&mut self) {
+        while let ThreadState::Running = self.state {
+            if self.stack.is_empty() {
+                self.state = ThreadState::Terminated;
+                break;
+            }
+            let opcode = self.current_frame();
+        }
+        todo!()
     }
     fn inc_pc(&mut self, val: u16) {
         self.current_frame_mut().pc += val;

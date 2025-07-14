@@ -1,10 +1,10 @@
 use quote::{format_ident, quote};
 use syn::{
-    Attribute, Fields, FieldsNamed, FieldsUnnamed, GenericArgument, Ident, Item, ItemEnum,
-    ItemStruct, PathArguments, Type, TypePath, bracketed, parenthesized,
+    Attribute, Expr, Field, Fields, FieldsNamed, FieldsUnnamed, GenericArgument, Ident, Item,
+    ItemEnum, ItemStruct, PathArguments, Type, TypePath, bracketed, parenthesized,
 };
 
-use base_macro::{attr_enum, syn_err};
+use base_macro::{attr_enum, simple_field_attr, syn_err};
 
 pub fn class_file_parse_derive_inner(ast: &Item) -> syn::Result<proc_macro2::TokenStream> {
     let result = match &ast {
@@ -136,50 +136,58 @@ fn resolve_named(
         let constant_index = attr_constant_index(field)?;
         let enum_entry = attr_enum_entry(&field.attrs)?;
         let is_set_constant_pool = attr_constant_pool(field)?.eq(&ConstantPool::Set);
+        let skip_expr = attr_skip(field)?;
 
-        let mut stmt = quote! {
-            let #field_ident = <#field_ty as ClassParser>::parse(ctx)?;
-        };
+        match skip_expr {
+            None => {
+                let mut stmt = quote! {
+                    let #field_ident = <#field_ty as ClassParser>::parse(ctx)?;
+                };
+                if let EnumEntry::Get = enum_entry {
+                    stmt = quote! {
+                        let #field_ident = ctx.enum_entry.downcast_ref::<#field_ty>().unwrap().clone();
+                    };
+                }
+                parse_stmts.push(stmt);
 
-        if let EnumEntry::Get = enum_entry {
-            stmt = quote! {
-                let #field_ident = ctx.enum_entry.downcast_ref::<#field_ty>().unwrap().clone();
-            };
-        }
-        parse_stmts.push(stmt);
-
-        match count {
-            Count::Get => {
-                collection_impl_blocks.push(resolve_collection_impl(field_ty, false)?);
-            }
-            Count::Set => {
-                parse_stmts.push(quote! {
-                    ctx.count = #field_ident as usize;
-                });
-            }
-            _ => {}
-        };
-        match constant_index {
-            ConstantIndex::Setend => {
-                parse_stmts.push(quote! {
-                    ctx.constant_index_range = 1..#field_ident;
-                });
-            }
-            ConstantIndex::Check => {
-                parse_stmts.push(quote! {
+                match count {
+                    Count::Get => {
+                        collection_impl_blocks.push(resolve_collection_impl(field_ty, false)?);
+                    }
+                    Count::Set => {
+                        parse_stmts.push(quote! {
+                            ctx.count = #field_ident as usize;
+                        });
+                    }
+                    _ => {}
+                };
+                match constant_index {
+                    ConstantIndex::Setend => {
+                        parse_stmts.push(quote! {
+                            ctx.constant_index_range = 1..#field_ident;
+                        });
+                    }
+                    ConstantIndex::Check => {
+                        parse_stmts.push(quote! {
                     if !ctx.constant_index_range.contains(&#field_ident) {
                         anyhow::bail!("invalid {}, not in range {:?}", stringify!(#field_ident), ctx.constant_index_range);
                     }
                 });
+                    }
+                    _ => {}
+                }
+                if is_set_constant_pool {
+                    parse_stmts.push(quote! {
+                        ctx.constant_pool = #field_ident.clone();
+                    });
+                }
             }
-            _ => {}
+            Some(expr) => {
+                parse_stmts.push(quote! {
+                    let #field_ident = #expr;
+                });
+            }
         }
-        if is_set_constant_pool {
-            parse_stmts.push(quote! {
-                ctx.constant_pool = #field_ident.clone();
-            });
-        }
-
         field_idents.push(field_ident);
     }
 
@@ -289,6 +297,15 @@ fn attr_enum_entry(attrs: &Vec<Attribute>) -> syn::Result<EnumEntry> {
         }
     }
     Ok(enum_entry)
+}
+
+fn attr_skip(field: &Field) -> syn::Result<Option<Expr>> {
+    field
+        .attrs
+        .iter()
+        .find(|attr| attr.path().is_ident("skip"))
+        .map(|attr| attr.parse_args())
+        .transpose()
 }
 
 fn resolve_collection_impl(

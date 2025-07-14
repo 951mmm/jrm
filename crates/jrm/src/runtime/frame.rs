@@ -1,4 +1,4 @@
-use crate::runtime::slot::Slot;
+use crate::runtime::{byte_reader::ByteReader, slot::Slot};
 
 pub struct OperandStack {
     stack: Vec<Slot>,
@@ -83,6 +83,23 @@ impl LocalVarsLike for Frame {
     }
 }
 
+impl ByteReader for Frame {
+    fn read_u1(&self) -> u8 {
+        unsafe { self.method.code.get_unchecked(self.pc as usize).clone() }
+    }
+    fn read_u2(&self) -> u16 {
+        unsafe {
+            let high = self.method.code.get_unchecked(self.pc as usize).clone() as u16;
+            let low = self
+                .method
+                .code
+                .get_unchecked((self.pc + 1) as usize)
+                .clone() as u16;
+            high << 8 | low
+        }
+    }
+}
+
 impl Frame {
     pub fn new(method: Method, return_pc: u16) -> Self {
         let operand_stack = OperandStack::new(method.max_stack);
@@ -106,7 +123,11 @@ impl Frame {
 
 #[cfg(test)]
 mod tests {
+    use rstest::{fixture, rstest};
+
     use crate::runtime::{
+        Method,
+        byte_reader::ByteReader,
         frame::{Frame, LocalVars, LocalVarsLike, OperandStack, OperandStackLike},
         slot::Slot,
     };
@@ -137,5 +158,20 @@ mod tests {
         assert_eq!(frame.locals.local_vars.capacity(), 0);
         assert_eq!(frame.operand_stack.max_size, 0);
         assert_eq!(frame.return_pc, 0);
+    }
+    #[fixture]
+    fn frame() -> Frame {
+        let method = Method {
+            code: vec![0x01, 0x11],
+            ..Default::default()
+        };
+        Frame::new(method, 0)
+    }
+    #[rstest]
+    fn test_frame_read_byte(frame: Frame) {
+        let u1 = frame.read_u1();
+        assert_eq!(u1, 0x01);
+        let u2 = frame.read_u2();
+        assert_eq!(u2, 0x111);
     }
 }
