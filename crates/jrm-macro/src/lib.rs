@@ -4,6 +4,7 @@ mod class_parser;
 mod constant;
 mod constant_enum;
 mod define_constants;
+mod define_instrucitons;
 mod impl_class_parser_for_vec;
 mod klass_debug;
 mod utils;
@@ -19,6 +20,7 @@ use crate::class_parser::class_file_parse_derive_inner;
 use crate::constant::constant_inner;
 use crate::constant_enum::constant_enum_inner;
 use crate::define_constants::define_constants_inner;
+use crate::define_instrucitons::define_instructions_inner;
 use crate::impl_class_parser_for_vec::impl_class_parser_for_vec_inner;
 use crate::klass_debug::klass_debug_derive_inner;
 
@@ -109,4 +111,10 @@ pub fn constant(attr: TokenStream, input: TokenStream) -> TokenStream {
     let attr = parse_macro_input!(attr as constant::Attrs);
     let mut item_struct = parse_macro_input!(input as ItemStruct);
     constant_inner(&attr, &mut item_struct).into()
+}
+
+#[proc_macro]
+pub fn define_instructions(input: TokenStream) -> TokenStream {
+    let mut ast = parse_macro_input!(input as define_instrucitons::Args);
+    define_instructions_inner(&mut ast).into()
 }

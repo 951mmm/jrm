@@ -10,3 +10,6 @@ maplit = "1.0.2"
 bpaf = { version = "0.9.20", features = ["derive"] }
 jrm-macro = { path = "../jrm-macro", features = ["debug"] }
 rust-embed = "8.7.2"
+thiserror = "2.0.12"
+bitflags = "2.9.1"
+rstest = "0.25.0"

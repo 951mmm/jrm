@@ -59,7 +59,7 @@ fn resolve_enum(item_enum: &ItemEnum) -> syn::Result<proc_macro2::TokenStream> {
                     let index = <#index_ty as ClassParser>::parse(ctx)?;
                     #debug_token_stream
                     ctx.enum_entry = Box::new(index);
-                    let choice: String = ContextIndex::get(&ctx.#map_ident, index)?;
+                    let choice: String = ContextIndex::get(&ctx.#map_ident, index);
                     let result = match choice.as_str() {
                         #(#arm_expr,)*
                         _ => {

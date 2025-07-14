@@ -1,10 +1,10 @@
-use std::fmt::Debug;
+use std::{fmt::Debug, hint::unreachable_unchecked, ops::Deref, sync::Arc};
 
 use crate::class_file_parser::{ClassParser, ContextIndex, ParserContext};
 use anyhow::bail;
 use jrm_macro::{ClassParser, constant, constant_enum, define_constants};
 
-#[derive(Clone, ClassParser, Default)]
+#[derive(ClassParser, Default)]
 pub struct ConstantPool(
     #[count(get)]
     #[constant_pool(read)]
@@ -25,8 +25,8 @@ impl Debug for ConstantPool {
 
 impl ContextIndex for ConstantPool {
     type Idx = u16;
-    fn get(&self, index: Self::Idx) -> anyhow::Result<String> {
-        (&self.0[index as usize]).try_into()
+    fn get(&self, index: Self::Idx) -> String {
+        self.get_utf8_string(index)
     }
 }
 
@@ -40,6 +40,21 @@ impl TryFrom<&Constant> for String {
     }
 }
 
+impl ConstantPool {
+    pub fn get_utf8_string(&self, index: u16) -> String {
+        if let Constant::Utf8(utf8) = self.0[index as usize].clone() {
+            return String::from(utf8);
+        }
+        unsafe { unreachable_unchecked() }
+    }
+}
+
+#[cfg(test)]
+impl From<Vec<Constant>> for ConstantPool {
+    fn from(value: Vec<Constant>) -> Self {
+        Self(value)
+    }
+}
 // #[derive(Clone, Debug, ClassParser)]
 // #[enum_entry(get(u8))]
 // #[repr(u8)]
@@ -83,7 +98,6 @@ constant_enum! {
     Module,
     Package
 }
-
 define_constants! {
     pub struct ConstantUtf8 {
         #[count(set)]
@@ -138,12 +152,36 @@ define_constants! {
     pub struct ConstantPackage {}
 }
 
+#[cfg(test)]
+impl From<String> for Constant {
+    fn from(value: String) -> Self {
+        Self::Utf8(value.into())
+    }
+}
+
+#[cfg(test)]
+impl From<String> for ConstantUtf8 {
+    fn from(value: String) -> Self {
+        Self {
+            tag: 0,
+            length: value.len() as u16,
+            bytes: value.into(),
+        }
+    }
+}
 // impl Debug for ConstantUtf8 {
 //     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 //         let utf8_string = String::from_utf8_lossy(&self.bytes);
 //         write!(f, "{}", utf8_string)
 //     }
 // }
+
+impl From<ConstantUtf8> for String {
+    fn from(value: ConstantUtf8) -> Self {
+        unsafe { String::from_utf8_unchecked(value.bytes) }
+    }
+}
+
 #[cfg(test)]
 mod tests {
 
@@ -169,9 +207,13 @@ mod tests {
     fn test_constant_pool_index() {
         let constant_pool = test_constant_pool();
         let i = 0_u16;
-        let err = ContextIndex::get(&constant_pool, i).unwrap_err();
-        assert_eq!(err.to_string(), "constant is not utf8");
-        let utf8 = ContextIndex::get(&constant_pool, 1_u16).unwrap();
+        let utf8 = ContextIndex::get(&constant_pool, 1_u16);
         assert_eq!(utf8, "aaaa");
+    }
+    #[test]
+    fn test_constant_pool_get_utf8_string() {
+        let constant_pool = test_constant_pool();
+        let utf8_string = constant_pool.get_utf8_string(1);
+        assert_eq!(utf8_string, "aaaa");
     }
 }

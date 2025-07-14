@@ -38,7 +38,7 @@ pub struct LineNumber {
 #[base_attribute(suffix(
     count_ident = local_variable_table_length,
     item_ty = LocalVariable,
-    rename = lcoal_variable_table
+    rename = local_variable_table
 ))]
 #[derive(Debug, ClassParser)]
 pub struct LocalVariableTableAttribute {}

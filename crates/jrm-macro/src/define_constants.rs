@@ -15,7 +15,6 @@ impl Parse for Ast {
 }
 pub fn define_constants_inner(structs: &mut Vec<ItemStruct>) -> proc_macro2::TokenStream {
     let prefix: Field = parse_quote!(
-        // TODO 添加ctx调用attr
         #[enum_entry(get)]
         pub tag: u8
     );

@@ -1,4 +1,10 @@
-use std::{any::Any, collections::HashMap, fmt::Debug, ops::Range};
+use std::{
+    any::Any,
+    collections::HashMap,
+    fmt::Debug,
+    ops::{Deref, Range},
+    sync::Arc,
+};
 
 use jrm_macro::{ClassParser, KlassDebug, generate_ux, impl_class_parser_for_vec};
 use maplit::hashmap;
@@ -11,20 +17,28 @@ use crate::{
 
 pub trait ContextIndex {
     type Idx;
-    fn get(&self, index: Self::Idx) -> anyhow::Result<String>;
+    fn get(&self, index: Self::Idx) -> String;
+}
+
+/// TODO 同129行
+impl<T: ContextIndex> ContextIndex for Arc<T> {
+    type Idx = T::Idx;
+    fn get(&self, index: Self::Idx) -> String {
+        self.deref().get(index)
+    }
 }
 
 impl ContextIndex for HashMap<u8, &'static str> {
     type Idx = u8;
-    fn get(&self, index: Self::Idx) -> anyhow::Result<String> {
-        Ok(self[&index].to_owned())
+    fn get(&self, index: Self::Idx) -> String {
+        self[&index].to_string()
     }
 }
 pub struct ParserContext {
     pub class_reader: ClassReader,
     pub count: usize,
     pub constant_index_range: Range<u16>,
-    pub constant_pool: ConstantPool,
+    pub constant_pool: Arc<ConstantPool>,
     pub constant_tag_map: HashMap<u8, &'static str>,
     pub enum_entry: Box<dyn Any>,
 }
@@ -112,55 +126,13 @@ impl ClassParser for f64 {
 }
 impl_class_parser_for_vec! {u8}
 
-#[derive(KlassDebug, ClassParser)]
-pub struct InstanceKlass {
-    #[hex]
-    magic: u32,
-    minor_version: u16,
-    major_version: u16,
-    #[count(set)]
-    #[constant_index(setend)]
-    constant_pool_count: u16,
-    #[constant_pool(set)]
-    constant_pool: ConstantPool,
-    #[hex]
-    #[constant_index(check)]
-    access_flags: u16,
-    #[constant_index(check)]
-    this_class: u16,
-    #[constant_index(check)]
-    super_class: u16,
-    #[count(set)]
-    interfaces_count: u16,
-    #[count(get)]
-    interfaces: Vec<Interface>,
-    #[count(set)]
-    fields_count: u16,
-    #[count(get)]
-    fields: Vec<Field>,
-    #[count(set)]
-    methods_count: u16,
-    #[count(get)]
-    methods: Vec<Method>,
-    #[count(set)]
-    attributes_count: u16,
-    #[count(impled)]
-    attributes: Vec<Attribute>,
-}
-type Interface = ConstantClass;
-#[derive(Debug, ClassParser)]
-pub struct Field(Property);
-
-#[derive(Debug, ClassParser)]
-pub struct Method(Property);
-
-#[derive(Debug, ClassParser)]
-pub struct Property {
-    access_flags: u16,
-    name_index: u16,
-    descriptor_index: u16,
-    #[count(set)]
-    attributes_count: u16,
-    #[count(impled)]
-    attributes: Vec<Attribute>,
+//TODO 可以写进宏，但是会和集合混淆。需要生成宏
+impl<T: ClassParser> ClassParser for Arc<T> {
+    fn parse(ctx: &mut ParserContext) -> anyhow::Result<Self>
+    where
+        Self: Sized,
+    {
+        let inner = <T as ClassParser>::parse(ctx)?;
+        Ok(Arc::new(inner))
+    }
 }

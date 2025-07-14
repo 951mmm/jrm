@@ -2,6 +2,9 @@ mod attributes;
 mod class_file_parser;
 mod class_reader;
 mod constant_pool;
+mod instance_klass;
+mod runtime;
+mod test_context;
 mod util;
 
 use std::{
@@ -12,8 +15,9 @@ use std::{
 use bpaf::{Bpaf, Parser};
 
 use crate::{
-    class_file_parser::{ClassParser, InstanceKlass, ParserContext},
+    class_file_parser::{ClassParser, ParserContext},
     class_reader::ClassReader,
+    instance_klass::InstanceKlass,
 };
 
 #[derive(Bpaf)]
@@ -47,30 +51,9 @@ fn resolve_stdin(file: &Option<String>) -> String {
 
 #[cfg(test)]
 mod tests {
-    use rust_embed::RustEmbed;
-
-    use crate::{
-        class_file_parser::{ClassParser, InstanceKlass, ParserContext},
-        class_reader::ClassReader,
-    };
-
-    #[derive(RustEmbed)]
-    #[folder = "asset/"]
-    #[exclude("*.java")]
-    struct TestContext;
-
-    impl TestContext {
-        pub fn parse_class_file(path: &str) {
-            let file = Self::get(path).unwrap();
-            let string = ClassReader::from(file.data.as_ref().to_vec());
-            let class_reader = string;
-            let mut parser_ctx = ParserContext::new(class_reader);
-            <InstanceKlass as ClassParser>::parse(&mut parser_ctx).unwrap();
-        }
-    }
-
+    use crate::test_context::TestContext;
     #[test]
     fn test_code_attribute() {
-        TestContext::parse_class_file("Simple1Impl.class");
+        let _ = TestContext::parse_class_file("Simple1Impl.class");
     }
 }

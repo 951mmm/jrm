@@ -3,8 +3,7 @@ use convert_case::{Case, Casing};
 use darling::{FromMeta, util::Flag};
 use quote::{format_ident, quote};
 use syn::{
-    Field, Fields, Ident, ItemStruct, Token, Type, TypePath,
-    parse_quote, punctuated::Punctuated,
+    Field, Fields, Ident, ItemStruct, Token, Type, TypePath, parse_quote, punctuated::Punctuated,
 };
 
 use crate::utils::try_extract_outer_ty_string;
@@ -153,13 +152,13 @@ fn get_suffix_list_field(
             Some(item_ty) => {
                 parse_quote!(
                     #[count(impled)]
-                    #list_ident: Vec<#item_ty>
+                    pub #list_ident: Vec<#item_ty>
                 )
             }
             None => {
                 parse_quote!(
                     #[count(impled)]
-                    #list_ident: Vec<u8>
+                    pub #list_ident: Vec<u8>
                 )
             }
         }
@@ -170,7 +169,7 @@ fn get_suffix_list_field(
         let item_ty = item_ty.as_ref().unwrap();
         parse_quote!(
             #[count(get)]
-            #list_ident: Vec<#item_ty>
+            pub #list_ident: Vec<#item_ty>
         )
     };
     Ok(result)
@@ -193,7 +192,6 @@ fn is_collection_ty(ty: &TypePath) -> bool {
 mod tests {
     use std::error::Error;
 
-    
     use macro_utils::print_expanded_fmt;
     use quote::ToTokens;
     use syn::{Field, ItemStruct, TypePath, parse_quote};
