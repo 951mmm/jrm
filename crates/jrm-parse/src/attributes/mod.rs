@@ -1,6 +1,6 @@
 mod code;
 
-use crate::parse::class_file_parser::{ClassParser, ContextIndex, ParserContext};
+use crate::class_file_parser::{ClassParser, ContextIndex, ParserContext};
 use jrm_macro::{ClassParser, attribute_enum, base_attribute, impl_class_parser_for_vec};
 
 use code::*;

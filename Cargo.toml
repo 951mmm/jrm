@@ -1,11 +1,15 @@
 [workspace]
-resolver = "2"
 members = [
+    "crates/jrm-runtime",
     "crates/base-macro",
-    "crates/jrm",
     "crates/jrm-macro",
     "crates/macro-utils",
+    "crates/jrm-parse",
+    "crates/jrm-cli",
+    "crates/jrm-native",
+    "crates/native-java",
 ]
+resolver = "3"
 
 [workspace.dependencies]
 anyhow = "1.0.98"

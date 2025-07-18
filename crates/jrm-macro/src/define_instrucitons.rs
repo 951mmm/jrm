@@ -1,9 +1,7 @@
-use convert_case::{Case, Casing};
-use darling::FromMeta;
 use quote::{ToTokens, format_ident, quote};
 use syn::{
-    Ident, ItemFn, ItemMacro, Lit, Macro, Token, braced,
-    parse::{self, Parse},
+    Ident, ItemFn, Lit, Macro, Token, braced,
+    parse::Parse,
     parse_quote,
     punctuated::Punctuated,
 };

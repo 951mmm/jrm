@@ -7,11 +7,12 @@ mod define_constants;
 mod define_instrucitons;
 mod impl_class_parser_for_vec;
 mod klass_debug;
+mod native_fn;
 mod utils;
 
 use proc_macro::TokenStream;
 use quote::{format_ident, quote};
-use syn::{DeriveInput, Ident, Item, ItemStruct, Type, parse_macro_input, parse_quote};
+use syn::{DeriveInput, Ident, Item, ItemFn, ItemStruct, Type, parse_macro_input, parse_quote};
 
 use base_macro::unwrap_err;
 
@@ -23,6 +24,7 @@ use crate::define_constants::define_constants_inner;
 use crate::define_instrucitons::define_instructions_inner;
 use crate::impl_class_parser_for_vec::impl_class_parser_for_vec_inner;
 use crate::klass_debug::klass_debug_derive_inner;
+use crate::native_fn::native_fn_inner;
 
 #[proc_macro]
 pub fn generate_ux(_: TokenStream) -> TokenStream {
@@ -117,4 +119,11 @@ pub fn constant(attr: TokenStream, input: TokenStream) -> TokenStream {
 pub fn define_instructions(input: TokenStream) -> TokenStream {
     let mut ast = parse_macro_input!(input as define_instrucitons::Args);
     define_instructions_inner(&mut ast).into()
+}
+
+#[proc_macro_attribute]
+pub fn native_fn(attrs: TokenStream, input: TokenStream) -> TokenStream {
+    let attrs = parse_macro_input!(attrs as native_fn::Attrs);
+    let mut item_fn = parse_macro_input!(input as ItemFn);
+    native_fn_inner(&attrs, &mut item_fn).into()
 }

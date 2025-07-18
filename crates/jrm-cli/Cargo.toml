@@ -1,0 +1,8 @@
+[package]
+name = "jrm-cli"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+jrm-parse = { path = "../jrm-parse" }
+bpaf = { version = "0.9.20", features = ["derive"] }

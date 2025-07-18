@@ -1,5 +1,4 @@
-use crate::runtime::{byte_reader::ByteReader, slot::Slot};
-
+use crate::{byte_reader::ByteReader, method::Method, slot::Slot};
 pub struct OperandStack {
     stack: Vec<Slot>,
     max_size: u16,
@@ -46,17 +45,6 @@ impl LocalVarsLike for LocalVars {
     }
 }
 
-// TODO 异常处理
-#[derive(Debug, Default)]
-pub struct Method {
-    pub name: String,
-    pub descriptor: String,
-    pub max_locals: u16,
-    pub max_stack: u16,
-    pub code: Vec<u8>,
-    pub is_static: bool,
-}
-
 pub struct Frame {
     operand_stack: OperandStack,
     locals: LocalVars,
@@ -85,16 +73,15 @@ impl LocalVarsLike for Frame {
 
 impl ByteReader for Frame {
     fn read_u1(&self) -> u8 {
-        unsafe { self.method.code.get_unchecked(self.pc as usize).clone() }
+        unsafe { *self.method.code.get_unchecked(self.pc as usize) }
     }
     fn read_u2(&self) -> u16 {
         unsafe {
-            let high = self.method.code.get_unchecked(self.pc as usize).clone() as u16;
-            let low = self
+            let high = *self.method.code.get_unchecked(self.pc as usize) as u16;
+            let low = *self
                 .method
                 .code
-                .get_unchecked((self.pc + 1) as usize)
-                .clone() as u16;
+                .get_unchecked((self.pc + 1) as usize) as u16;
             high << 8 | low
         }
     }
@@ -125,11 +112,10 @@ impl Frame {
 mod tests {
     use rstest::{fixture, rstest};
 
-    use crate::runtime::{
-        Method,
+    use crate::{
         byte_reader::ByteReader,
-        frame::{Frame, LocalVars, LocalVarsLike, OperandStack, OperandStackLike},
-        slot::Slot,
+        frame::{Frame, LocalVarsLike, OperandStack, OperandStackLike},
+        method::Method,
     };
 
     #[test]

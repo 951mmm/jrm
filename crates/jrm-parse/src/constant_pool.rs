@@ -1,17 +1,15 @@
-use std::{collections::HashMap, fmt::Debug, hint::unreachable_unchecked, ops::Deref, sync::Arc};
+use std::{fmt::Debug, hint::unreachable_unchecked};
 
-use crate::parse::class_file_parser::{ClassParser, ContextIndex, ParserContext};
-use crate::runtime::Slot;
+use crate::class_file_parser::{ClassParser, ContextIndex, ParserContext};
 use anyhow::bail;
 use jrm_macro::{ClassParser, constant, constant_enum, define_constants};
 
 #[derive(ClassParser, Default)]
 pub struct ConstantPool {
+    // meta
     #[count(get)]
     #[constant_pool(read)]
-    pub constants: Vec<Constant>,
-    #[skip(HashMap::new())]
-    slot_cache: HashMap<u16, Slot>,
+    constants: Vec<Constant>,
 }
 impl Debug for ConstantPool {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -40,33 +38,19 @@ impl ConstantPool {
         }
         unsafe { unreachable_unchecked() }
     }
-    pub fn init_cache(&mut self) {
-        for (index, constant) in self.constants.iter().enumerate() {
-            match constant {
-                Constant::Integer(integer) => {
-                    self.slot_cache.insert(index as u16, integer.bytes.into());
-                }
-                Constant::Float(float) => {
-                    self.slot_cache.insert(index as u16, float.bytes.into());
-                }
-                // TODO 完成heap的设计和objref
-                // Constant::String(string) => {
-                //     let ref_index = string.string_index;
-                //     let
-                // }
-                _ => {}
-            }
-        }
+    pub fn get_with<F, T>(&self, index: u16, f: F) -> T
+    where
+        F: FnOnce(&Constant) -> T,
+    {
+        let constant = &self.constants[index as usize];
+        f(constant)
     }
 }
 
-#[cfg(test)]
+#[cfg(feature = "test")]
 impl From<Vec<Constant>> for ConstantPool {
     fn from(value: Vec<Constant>) -> Self {
-        Self {
-            constants: value,
-            ..Default::default()
-        }
+        Self { constants: value }
     }
 }
 // #[derive(Clone, Debug, ClassParser)]
@@ -92,7 +76,6 @@ impl From<Vec<Constant>> for ConstantPool {
 //     Package(u16),
 //     Invalid = 0,
 // }
-
 constant_enum! {
     Utf8,
     Integer,
@@ -177,14 +160,14 @@ define_constants! {
     pub struct ConstantPackage {}
 }
 
-#[cfg(test)]
+#[cfg(feature = "test")]
 impl From<String> for Constant {
     fn from(value: String) -> Self {
         Self::Utf8(value.into())
     }
 }
 
-#[cfg(test)]
+#[cfg(feature = "test")]
 impl From<String> for ConstantUtf8 {
     fn from(value: String) -> Self {
         Self {
@@ -192,6 +175,13 @@ impl From<String> for ConstantUtf8 {
             length: value.len() as u16,
             bytes: value.into(),
         }
+    }
+}
+
+#[cfg(feature = "test")]
+impl ConstantClass {
+    pub fn new(name_index: u16) -> Self {
+        Self { tag: 0, name_index }
     }
 }
 
@@ -211,7 +201,7 @@ impl From<ConstantUtf8> for String {
 #[cfg(test)]
 mod tests {
 
-    use crate::parse::{
+    use crate::{
         class_file_parser::ContextIndex,
         constant_pool::{Constant, ConstantClass, ConstantPool, ConstantUtf8},
     };
@@ -221,7 +211,7 @@ mod tests {
             constants: vec![
                 Constant::Class(ConstantClass {
                     tag: 2,
-                    name_index: 12,
+                    name_index: 1,
                 }),
                 Constant::Utf8(ConstantUtf8 {
                     tag: 99,
@@ -235,7 +225,7 @@ mod tests {
     #[test]
     fn test_constant_pool_index() {
         let constant_pool = test_constant_pool();
-        let i = 0_u16;
+        let _ = 0_u16;
         let utf8 = ContextIndex::get(&constant_pool, 1_u16);
         assert_eq!(utf8, "aaaa");
     }

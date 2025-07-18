@@ -1,8 +1,11 @@
+
+use crate::heap::ObjectRef;
+
 #[derive(Debug, Clone)]
 pub enum Slot {
     Bits32(u32),
     Bits64(u64),
-    Ref(Option<ObjectRef>),
+    Ref(ObjectRef),
 }
 
 macro_rules! convert_panic {
@@ -81,12 +84,38 @@ impl From<f64> for Slot {
         Slot::Bits64(value.to_bits())
     }
 }
-#[derive(Debug, Clone)]
-pub struct ObjectRef(u32);
+
+impl From<(u32, u32)> for Slot {
+    fn from(value: (u32, u32)) -> Self {
+        let (high, low) = value;
+        Self::Bits64(((high as u64) >> 32) | (low as u64))
+    }
+}
+
+impl From<ObjectRef> for Slot {
+    fn from(value: ObjectRef) -> Self {
+        Self::Ref(value)
+    }
+}
+
+// TODO 裸指针优化
+// #[repr(transparent)]
+// #[derive(Debug)]
+// pub struct ObjectRef(NonNull<HeapObject>); // 裸指针包装
+
+// impl ObjectRef {
+//     pub fn null() -> Self {
+//         unsafe { Self(NonNull::new_unchecked(1 as *mut _)) }
+//     }
+
+//     pub fn is_null(&self) -> bool {
+//         self.0.as_ptr() as usize == 1
+//     }
+// }
 
 #[cfg(test)]
 mod tests {
-    use crate::runtime::slot::Slot;
+    use crate::slot::Slot;
 
     #[test]
     fn test_slot_into() {

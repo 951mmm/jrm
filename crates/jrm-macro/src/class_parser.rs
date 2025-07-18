@@ -1,6 +1,6 @@
 use quote::{format_ident, quote};
 use syn::{
-    Attribute, Expr, Field, Fields, FieldsNamed, FieldsUnnamed, GenericArgument, Ident, Item,
+    Attribute, Fields, FieldsNamed, FieldsUnnamed, GenericArgument, Ident, Item,
     ItemEnum, ItemStruct, PathArguments, Type, TypePath, bracketed, parenthesized,
 };
 
@@ -138,10 +138,10 @@ fn resolve_named(
         // NOTE set和read或许不会同时出现。需要包装
         let is_set_constant_pool = attr_constant_pool(field)?.eq(&ConstantPool::Set);
         let is_constant_pool_read_mode = attr_constant_pool(field)?.eq(&ConstantPool::Read);
-        let skip_expr = attr_skip(field)?;
+        let is_skip = attr_skip(field);
 
-        match skip_expr {
-            None => {
+        match is_skip {
+            false => {
                 let mut stmt = quote! {
                     let #field_ident = <#field_ty as ClassParser>::parse(ctx)?;
                 };
@@ -189,9 +189,9 @@ fn resolve_named(
                     });
                 }
             }
-            Some(expr) => {
+            true => {
                 parse_stmts.push(quote! {
-                    let #field_ident = #expr;
+                    let #field_ident = std::default::Default::default();
                 });
             }
         }
@@ -306,14 +306,7 @@ fn attr_enum_entry(attrs: &Vec<Attribute>) -> syn::Result<EnumEntry> {
     Ok(enum_entry)
 }
 
-fn attr_skip(field: &Field) -> syn::Result<Option<Expr>> {
-    field
-        .attrs
-        .iter()
-        .find(|attr| attr.path().is_ident("skip"))
-        .map(|attr| attr.parse_args())
-        .transpose()
-}
+simple_field_attr! {"skip"}
 
 fn resolve_collection_impl(
     collection_ty: &Type,

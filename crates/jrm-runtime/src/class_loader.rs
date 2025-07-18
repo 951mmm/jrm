@@ -1,15 +1,14 @@
 use std::{
-    collections::HashMap,
     fs,
     path::PathBuf,
-    sync::{Arc, RwLock},
+    sync::Arc,
 };
 
 use dashmap::DashMap;
 
-use crate::parse::{
+use jrm_parse::{
     class_file_parser::ClassParser,
-    instance_klass::{self, InstanceKlass},
+    instance_klass::InstanceKlass,
 };
 
 #[derive(Debug, thiserror::Error)]
@@ -19,14 +18,32 @@ pub enum ClassLoaderError {
     #[error("class parse error: {0}")]
     ClassParseError(#[from] anyhow::Error),
 }
-pub struct ClassLoader {
-    parent: Option<Arc<ClassLoader>>,
+
+pub trait ClassLoaderLike {
+    fn load_class(&mut self, name: String) -> Result<Arc<InstanceKlass>, ClassLoaderError>;
+}
+#[derive(Debug)]
+pub struct AppClassLodaer {
+    parent: Option<Arc<AppClassLodaer>>,
     loaded_classes: DashMap<String, Arc<InstanceKlass>>,
     search_paths: Vec<PathBuf>,
 }
 
-impl ClassLoader {
-    pub fn new(parent: Option<Arc<ClassLoader>>, paths: Vec<impl Into<PathBuf>>) -> Self {
+impl ClassLoaderLike for AppClassLodaer {
+    fn load_class(&mut self, name: String) -> Result<Arc<InstanceKlass>, ClassLoaderError> {
+        if let Some(class) = self.find_class(&name) {
+            return Ok(class);
+        }
+        // TODO 默认的bootstrap加载。通过java home
+        let bytes = self.load_from_path(&name)?;
+        let instance_klass = InstanceKlass::parse(&mut bytes.into())?;
+        let instance_klass = Arc::new(instance_klass);
+        Ok(self.define_class(name, instance_klass))
+    }
+}
+
+impl AppClassLodaer {
+    pub fn new(parent: Option<Arc<AppClassLodaer>>, paths: Vec<impl Into<PathBuf>>) -> Self {
         Self {
             parent,
             loaded_classes: DashMap::new(),
@@ -46,7 +63,7 @@ impl ClassLoader {
     }
     fn define_class(
         &mut self,
-        // FIXME 使用strmap
+        // FIXME 使用&str map
         name: String,
         instance_klass: Arc<InstanceKlass>,
     ) -> Arc<InstanceKlass> {
@@ -65,17 +82,10 @@ impl ClassLoader {
         }
         Err(ClassLoaderError::ClassNotFoundError(name.to_string()))
     }
-    pub fn load_class(&mut self, name: String) -> Result<Arc<InstanceKlass>, ClassLoaderError> {
-        if let Some(class) = self.find_class(&name) {
-            return Ok(class);
-        }
-        // TODO 默认的bootstrap加载。通过java home
-        let bytes = self.load_from_path(&name)?;
-        let instance_klass = InstanceKlass::parse(&mut bytes.into())?;
-        let instance_klass = Arc::new(instance_klass);
-        Ok(self.define_class(name, instance_klass))
-    }
 }
+
+// TODO 根据jimage设计bootstrap loader
+pub struct BootstrapClassLoader {}
 
 #[cfg(test)]
 mod tests {
@@ -83,18 +93,18 @@ mod tests {
 
     use rstest::{fixture, rstest};
 
-    use crate::runtime::class_loader::ClassLoader;
+    use crate::class_loader::{AppClassLodaer, ClassLoaderLike};
 
     #[fixture]
-    fn class_loader() -> ClassLoader {
+    fn class_loader() -> AppClassLodaer {
         let paths = vec!["/home/ww/Documents/note/jrm/crates/jrm/asset"];
-        let class_loader = ClassLoader::new(None, paths);
-        class_loader
+        
+        AppClassLodaer::new(None, paths)
     }
 
     #[rstest]
-    fn test_load_simpl1impl(mut class_loader: ClassLoader) -> Result<(), Box<dyn Error>> {
-        let class = class_loader.load_class("Simple1Impl".to_string())?;
+    fn test_load_simpl1impl(mut class_loader: AppClassLodaer) -> Result<(), Box<dyn Error>> {
+        let _class = class_loader.load_class("Simple1Impl".to_string())?;
         Ok(())
     }
 }

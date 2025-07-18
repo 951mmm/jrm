@@ -1,20 +1,17 @@
 use std::{
-    ops::Index,
     sync::{Arc, Mutex},
     usize,
 };
 
 use jrm_macro::define_instructions;
+use jrm_parse::{Constant, ConstantPool};
 
 use crate::{
-    parse::constant_pool::ConstantPool,
-    runtime::{
-        Method,
-        byte_reader::ByteReader,
-        frame::{Frame, LocalVarsLike, OperandStackLike},
-        heap::Heap,
-        slot::Slot,
-    },
+    byte_reader::ByteReader,
+    frame::{Frame, LocalVarsLike, OperandStackLike},
+    heap::{Heap, ObjectRef},
+    method::Method,
+    slot::Slot,
 };
 
 pub enum ThreadState {
@@ -72,7 +69,7 @@ impl Thread {
                 id,
                 stack: vec![initial_frame],
                 state: ThreadState::Running,
-                constant_pool: constant_pool,
+                constant_pool,
                 heap,
             }
         }
@@ -107,6 +104,26 @@ impl Thread {
         let pc = setter(&self.current_frame().pc);
         self.current_frame_mut().pc = pc;
     }
+    pub fn get_slot_from_constant_pool(&mut self, index: u16) -> Slot {
+        self.constant_pool
+            .get_with(index, |constant| match constant {
+                Constant::Integer(integer) => integer.bytes.into(),
+                Constant::Float(float) => float.bytes.into(),
+                Constant::Long(long) => (long.high_bytes, long.low_bytes).into(),
+                Constant::Double(double) => (double.high_bytes, double.low_bytes).into(),
+                Constant::String(string) => {
+                    let ref_index = string.string_index;
+                    let utf8_string = self.constant_pool.get_utf8_string(ref_index);
+                    todo!()
+                }
+                Constant::Class(class) => {
+                    let ref_index = class.name_index;
+                    let class_name = self.constant_pool.get_utf8_string(ref_index);
+                    todo!()
+                }
+                _ => todo!(),
+            })
+    }
 }
 
 define_instructions! {
@@ -123,7 +140,9 @@ define_instructions! {
     // ...
     0x18 => ldc {
         fn ldc() {
+            let index = self.read_u1() as usize;
 
+            // 如果是字符串，就存到string_pool中
         }
     }
 }
@@ -132,27 +151,35 @@ define_instructions! {
 mod tests {
     use std::sync::Arc;
 
+    use jrm_parse::{Constant, ConstantClass, ConstantPool};
     use rstest::{fixture, rstest};
 
-    use crate::{
-        parse::constant_pool::{Constant, ConstantPool},
-        runtime::{Method, thread::Thread},
-    };
+    use crate::{method::Method, thread::Thread};
 
     #[fixture]
     fn thread() -> Thread {
         let constant_pool = ConstantPool::from(vec![
             Constant::Invalid,
+            Constant::Class(ConstantClass::new(2)),
             Constant::from("some string".to_string()),
         ]);
         let constant_pool = Arc::new(constant_pool);
 
-        let method = Method {
-            max_stack: 100,
-            ..Default::default()
-        };
-        let thread = Thread::new(0, method, constant_pool, Default::default());
-        thread
+        let method = Method::with_max_stack(100);
+
+        Thread::new(0, method, constant_pool, Default::default())
+    }
+
+    #[rstest]
+    fn test_constant_pool_get_with(thread: Thread) {
+        let class = thread.constant_pool.get_with(1, |class| {
+            if let Constant::Class(class) = class {
+                let ref_index = class.name_index;
+                let class_name = thread.constant_pool.get_utf8_string(ref_index);
+                // let class = thread.heap.get_mut().unwrap().allocate()
+            }
+            todo!()
+        });
     }
 
     #[rstest]

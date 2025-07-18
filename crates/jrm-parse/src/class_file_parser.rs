@@ -1,18 +1,16 @@
 use std::{
     any::Any,
     collections::HashMap,
-    fmt::Debug,
     ops::{Deref, Range},
     sync::Arc,
 };
 
-use jrm_macro::{ClassParser, KlassDebug, generate_ux, impl_class_parser_for_vec};
+use jrm_macro::{generate_ux, impl_class_parser_for_vec};
 use maplit::hashmap;
 
-use crate::parse::{
-    attributes::Attribute,
+use crate::{
     class_reader::ClassReader,
-    constant_pool::{ConstantClass, ConstantPool},
+    constant_pool::ConstantPool,
 };
 
 pub trait ContextIndex {

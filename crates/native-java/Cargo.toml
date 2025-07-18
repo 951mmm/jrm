@@ -1,0 +1,11 @@
+[package]
+name = "native-java"
+version = "0.1.0"
+edition = "2024"
+
+[lib]
+crate-type = ["dylib"]
+
+[dependencies]
+jrm-native = { path = "../jrm-native" }
+jrm-macro = { path = "../jrm-macro" }

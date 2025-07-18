@@ -2,10 +2,9 @@ use std::sync::Arc;
 
 use bitflags::{Flags, bitflags};
 
-use crate::parse::attributes::Attribute;
-use crate::parse::class_file_parser::{ClassParser, ParserContext};
-use crate::parse::constant_pool::{ConstantClass, ConstantPool};
-use crate::runtime::Method as FrameMethod;
+use crate::attributes::Attribute;
+use crate::class_file_parser::{ClassParser, ParserContext};
+use crate::constant_pool::{ConstantClass, ConstantPool};
 use jrm_macro::{ClassParser, KlassDebug};
 
 bitflags! {
@@ -38,7 +37,7 @@ bitflags! {
 }
 
 bitflags! {
-    #[derive(Debug, Clone, Copy)]
+    #[derive(Debug, Default, Clone, Copy)]
     pub struct MethodAccessFlags: u16 {
         const PUBLIC        = 0x0001;
         const PRIVATE       = 0x0002;
@@ -105,11 +104,10 @@ pub struct InstanceKlass {
     attributes: Vec<Attribute>,
 }
 impl InstanceKlass {
-    pub fn find_method(&self, name: &str, descriptor: &str) -> FrameMethod {
-        let mut max_locals = None;
-        let mut max_stack = None;
-        let mut code = None;
-        let mut is_static = false;
+    pub fn find_method_with<F, T>(&self, name: &str, descriptor: &str, f: F) -> T
+    where
+        F: FnOnce(&Method) -> T,
+    {
         unsafe {
             self.methods
                 .iter()
@@ -117,35 +115,52 @@ impl InstanceKlass {
                     let method_name = self.constant_pool.get_utf8_string(method.name_index);
                     let method_descriptor =
                         self.constant_pool.get_utf8_string(method.descriptor_index);
-                    method_name == name || method_descriptor == descriptor
+                    method_name == name && method_descriptor == descriptor
                 })
-                .map(|method| {
-                    is_static = method.access_flags.contains(MethodAccessFlags::STATIC);
-                    &method.attributes
-                })
+                .map(f)
                 .unwrap_unchecked()
-                .iter()
-                .for_each(|attr| {
-                    if let Attribute::Code(code_attr) = attr {
-                        max_locals = Some(code_attr.max_locals);
-                        max_stack = Some(code_attr.max_stack);
-                        code = Some(&code_attr.code);
-                    }
-                });
-
-            FrameMethod {
-                name: name.to_string(),
-                descriptor: descriptor.to_string(),
-                max_locals: max_locals.unwrap_unchecked(),
-                max_stack: max_stack.unwrap_unchecked(),
-                code: code.unwrap_unchecked().clone(),
-                is_static,
-            }
         }
     }
-    pub fn get_constant_pool(&self) -> Arc<ConstantPool> {
-        self.constant_pool.clone()
-    }
+    //     pub fn find_method(&self, name: &str, descriptor: &str) -> runtime::Method {
+    //         let mut max_locals = None;
+    //         let mut max_stack = None;
+    //         let mut code = None;
+    //         let mut access_flags = None;
+    //         unsafe {
+    //             self.methods
+    //                 .iter()
+    //                 .find(|method| {
+    //                     let method_name = self.constant_pool.get_utf8_string(method.name_index);
+    //                     let method_descriptor =
+    //                         self.constant_pool.get_utf8_string(method.descriptor_index);
+    //                     method_name == name || method_descriptor == descriptor
+    //                 })
+    //                 .map(|method| {
+    //                     access_flags = Some(method.access_flags);
+    //                     &method.attributes
+    //                 })
+    //                 .unwrap_unchecked()
+    //                 .iter()
+    //                 .for_each(|attr| {
+    //                     if let Attribute::Code(code_attr) = attr {
+    //                         max_locals = Some(code_attr.max_locals);
+    //                         max_stack = Some(code_attr.max_stack);
+    //                         code = Some(&code_attr.code);
+    //                     }
+    //                 });
+    //             runtime::Method {
+    //                 name: name.to_string(),
+    //                 descriptor: descriptor.to_string(),
+    //                 max_locals: max_locals.unwrap_unchecked().clone(),
+    //                 max_stack: max_stack.unwrap_unchecked().clone(),
+    //                 code: code.unwrap_unchecked().clone(),
+    //                 access_flags: access_flags.unwrap_unchecked().clone(),
+    //             }
+    //         }
+    //     }
+    //     pub fn get_constant_pool(&self) -> Arc<ConstantPool> {
+    //         self.constant_pool.clone()
+    //     }
 }
 type Interface = ConstantClass;
 #[derive(Debug, ClassParser)]
@@ -161,34 +176,11 @@ pub struct Field {
 
 #[derive(Debug, ClassParser)]
 pub struct Method {
-    access_flags: MethodAccessFlags,
-    name_index: u16,
-    descriptor_index: u16,
+    pub access_flags: MethodAccessFlags,
+    pub name_index: u16,
+    pub descriptor_index: u16,
     #[count(set)]
-    attributes_count: u16,
+    pub attributes_count: u16,
     #[count(impled)]
-    attributes: Vec<Attribute>,
-}
-
-#[cfg(test)]
-mod tests {
-    use crate::{parse::instance_klass::ClassAccessFlags, test_context::TestContext};
-
-    #[test]
-    fn test_class_access_flag() {
-        let instance_klass = TestContext::parse_class_file("Simple1Impl.class");
-        assert!(
-            !instance_klass
-                .access_flags
-                .contains(ClassAccessFlags::PUBLIC)
-        )
-    }
-
-    #[test]
-    fn test_find_method() {
-        let instance_klass = TestContext::parse_class_file("Simple1Impl.class");
-        let method = instance_klass.find_method("main", "([Ljava/lang/String)V");
-        println!("method {} is: {:?}", method.name, method);
-        assert!(method.is_static);
-    }
+    pub attributes: Vec<Attribute>,
 }

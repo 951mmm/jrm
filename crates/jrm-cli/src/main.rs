@@ -1,6 +1,3 @@
-mod parse;
-mod runtime;
-mod test_context;
 use std::{
     fs,
     io::{self, Read},
@@ -8,7 +5,7 @@ use std::{
 
 use bpaf::{Bpaf, Parser};
 
-use crate::parse::{
+use jrm_parse::{
     class_file_parser::{ClassParser, ParserContext},
     class_reader::ClassReader,
     instance_klass::InstanceKlass,
@@ -40,14 +37,5 @@ fn resolve_stdin(file: &Option<String>) -> String {
             io::stdin().read_to_string(&mut buf).unwrap();
             buf
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use crate::test_context::TestContext;
-    #[test]
-    fn test_code_attribute() {
-        let _ = TestContext::parse_class_file("Simple1Impl.class");
     }
 }
