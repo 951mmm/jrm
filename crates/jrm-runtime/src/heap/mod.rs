@@ -1,22 +1,36 @@
+pub mod array;
 pub mod instance;
 
-use std::{
-    collections::HashMap,
-    sync::{
-        Arc, OnceLock,
-        atomic::{AtomicBool, Ordering},
-    },
-};
+use std::{collections::HashMap, sync::Arc};
 
 use indexmap::IndexMap;
 
-use crate::{slot::Slot, string_pool::StringPool};
 use instance::Instance;
+
+use crate::heap::array::Array;
 
 #[derive(Debug, Default)]
 pub struct Heap {
-    data: IndexMap<ObjectRef, Instance>,
+    data: IndexMap<i32, HeapValue>,
     string_pool: HashMap<String, ObjectRef>,
+}
+
+impl Heap {
+    pub fn get_string_ref(&self, lit: &str) -> Option<ObjectRef> {
+        self.string_pool.get(lit).copied()
+    }
+}
+
+#[derive(Debug)]
+pub enum HeapValue {
+    Object(Instance),
+    Arr(Array),
+}
+#[derive(Debug)]
+pub struct ObjectHeader {
+    mark_word: usize,
+    // 指向堆中的类
+    class_ref: Arc<Instance>,
 }
 
 #[repr(transparent)]
@@ -35,9 +49,4 @@ impl ObjectRef {
     pub const fn is_null(self) -> bool {
         self.0 == 0
     }
-}
-
-#[cfg(test)]
-mod tests {
-    use crate::heap::ObjectRef;
 }

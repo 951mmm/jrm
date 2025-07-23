@@ -1,15 +1,8 @@
-use std::{
-    fs,
-    path::PathBuf,
-    sync::Arc,
-};
+use std::{fs, path::PathBuf, sync::Arc};
 
 use dashmap::DashMap;
 
-use jrm_parse::{
-    class_file_parser::ClassParser,
-    instance_klass::InstanceKlass,
-};
+use jrm_parse::{class_file_parser::ClassParser, instance_klass::InstanceKlass};
 
 #[derive(Debug, thiserror::Error)]
 pub enum ClassLoaderError {
@@ -98,7 +91,7 @@ mod tests {
     #[fixture]
     fn class_loader() -> AppClassLodaer {
         let paths = vec!["/home/ww/Documents/note/jrm/crates/jrm/asset"];
-        
+
         AppClassLodaer::new(None, paths)
     }
 

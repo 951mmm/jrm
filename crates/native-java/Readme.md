@@ -8,4 +8,5 @@
 为何要使用c的动态链接，workspace直接链接不行？
 
 因为java有一个System.loadLibrary()
-- [ ] java.lang.string
+- [ ] java.lang.String
+- [x] java.lang.System

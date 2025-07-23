@@ -1,9 +1,6 @@
 use quote::{ToTokens, format_ident, quote};
 use syn::{
-    Ident, ItemFn, Lit, Macro, Token, braced,
-    parse::Parse,
-    parse_quote,
-    punctuated::Punctuated,
+    Ident, ItemFn, Lit, Macro, Token, braced, parse::Parse, parse_quote, punctuated::Punctuated,
 };
 
 pub struct Args {
@@ -66,13 +63,15 @@ pub fn define_instructions_inner(ast: &mut Args) -> proc_macro2::TokenStream {
         let instr_ident_string = instr_ident.to_string();
         let executor_fn_ident = format_ident!("execute_{}", instr_ident_string);
         let executor_arm = quote! {
-            #opcode => self.#executor_fn_ident(),
+            #opcode => self.#executor_fn_ident()?,
         };
         executor_arms.push(executor_arm);
         let executor_fn = match executor {
             Executor::Fn(__fn) => {
                 __fn.sig.ident = executor_fn_ident;
                 __fn.sig.inputs = parse_quote!(&mut self);
+                __fn.sig.output = parse_quote!(-> Result<()>);
+                __fn.block.stmts.push(parse_quote!(return Ok(());));
                 __fn.to_token_stream()
             }
             Executor::Macro(__macro) => __macro.to_token_stream(),
@@ -82,11 +81,12 @@ pub fn define_instructions_inner(ast: &mut Args) -> proc_macro2::TokenStream {
 
     quote! {
         impl Thread {
-            pub fn execute(&mut self, opcode: u8) {
+            pub fn execute(&mut self, opcode: u8) -> Result<()> {
                 match opcode {
                     #(#executor_arms)*
-                    _ => unsafe { std::hint::unreachable_unchecked() }
+                    _ => { return Err(Error::ExecutionError(format!("unrecongnized opcode: {}", opcode))); }
                 };
+                return Ok(());
             }
             #(#executor_fns)*
         }

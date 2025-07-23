@@ -1,8 +1,6 @@
 use darling::FromMeta;
-use proc_macro::Ident;
-use proc_macro2::Literal;
 use quote::{format_ident, quote};
-use syn::{ItemFn, Lit, LitStr, parse_quote};
+use syn::ItemFn;
 
 #[derive(Debug, FromMeta)]
 #[darling(derive_syn_parse)]
@@ -23,7 +21,7 @@ pub fn native_fn_inner(attrs: &Attrs, item_fn: &mut ItemFn) -> proc_macro2::Toke
 
 #[cfg(test)]
 mod tests {
-    use syn::parse::Parse;
+    
 
     use crate::native_fn::Attrs;
 

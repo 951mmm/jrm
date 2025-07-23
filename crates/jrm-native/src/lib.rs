@@ -1,3 +1,4 @@
+
 pub type JBoolean = bool;
 pub type JByte = i8;
 pub type JChar = u16;
@@ -8,7 +9,7 @@ pub type JSize = i32;
 pub type JFloat = f32;
 pub type JDouble = f64;
 
-// 指向accessoop的指针
+// 指向堆的指针
 pub struct JObject(i32);
 pub type JClass = JObject;
 pub type JThrowable = JObject;
@@ -24,6 +25,9 @@ pub type JFloatArray = JArray;
 pub type JDoubleArray = JArray;
 pub type JObjectArray = JArray;
 
+// 元数据中field的下标
+pub struct JField(i32);
+
 pub enum JValue {
     Boolean(bool),
     Byte(i8),
@@ -36,21 +40,24 @@ pub enum JValue {
     Object(JObject),
 }
 
+// 应该保持无状态
 pub struct NativeContext {
-    pub get_intern_string: Box<dyn Fn(&NativeContext, JObject) -> JObject>,
+    pub get_intern_string: Box<dyn Fn(JObject) -> JObject>,
+    pub get_static_field: Box<dyn Fn(&JClass, &str, &str) -> Result<JField>>,
+    pub set_static_object_field: Box<dyn Fn(&JClass, JField, JObject)>,
 }
+
+#[derive(Debug, thiserror::Error)]
+pub enum Error {
+    #[error("{0} not found")]
+    NotFound(String),
+}
+pub type Result<T> = std::result::Result<T, Error>;
 
 #[cfg(test)]
 mod tests {
-    use crate::{JObject, NativeContext};
+    
 
     #[test]
-    fn test_ctx() {
-        fn get_intern_string(ctx: &NativeContext, this: JObject) -> JObject {
-            JObject(1)
-        }
-        let ctx = NativeContext {
-            get_intern_string: Box::new(get_intern_string),
-        };
-    }
+    fn test_ctx() {}
 }

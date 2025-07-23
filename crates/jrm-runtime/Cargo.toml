@@ -8,14 +8,14 @@ jrm-parse = { path = "../jrm-parse", features = ["test"] }
 jrm-macro = { path = "../jrm-macro", features = ["debug"] }
 anyhow = { workspace = true }
 dotenvy = { workspace = true }
+thiserror = { workspace = true }
 
 rust-embed = "8.7.2"
-thiserror = "2.0.12"
 rstest = "0.25.0"
 dashmap = "6.1.0"
 log = "0.4.27"
 env_logger = "0.11.8"
-# TODO 内置jimage
-jimage = "0.2.4"
 indexmap = "2.10.0"
 bitfields = "1.0.0"
+jimage-rs = "0.0.2"
+derive_builder = "0.20.2"
