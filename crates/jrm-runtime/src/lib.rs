@@ -1,4 +1,4 @@
-use std::sync::PoisonError;
+use std::{mem, sync::PoisonError};
 
 mod byte_reader;
 mod class;
@@ -34,6 +34,18 @@ impl Error {
     }
 }
 pub type Result<T> = std::result::Result<T, Error>;
+
+pub enum Type {
+    Boolean,
+    Byte,
+    Char,
+    Int,
+    Float,
+    Long,
+    Double,
+    Ref,
+    Array(Box<Type>),
+}
 
 #[derive(Debug)]
 pub struct Runtime {}

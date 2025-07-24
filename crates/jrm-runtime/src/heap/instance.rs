@@ -1,5 +1,3 @@
-use std::sync::Arc;
-
 use jrm_parse::instance_klass::FieldAccessFlags;
 
 use crate::heap::{ObjectHeader, ObjectRef};

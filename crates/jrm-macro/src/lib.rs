@@ -1,3 +1,4 @@
+mod allocate_array_arms;
 mod base_attribute;
 mod build_enum_input;
 mod class_parser;
@@ -11,8 +12,13 @@ mod native_fn;
 mod utils;
 
 use proc_macro::TokenStream;
-use quote::{format_ident, quote};
-use syn::{DeriveInput, Ident, Item, ItemFn, ItemStruct, Type, parse_macro_input, parse_quote};
+use quote::{ToTokens, format_ident, quote};
+use syn::parse::Parser;
+use syn::punctuated::Punctuated;
+use syn::{
+    DeriveInput, Expr, ExprMatch, Ident, Item, ItemFn, ItemStruct, Local, LocalInit, Stmt, Token,
+    Type, parse_macro_input, parse_quote,
+};
 
 use base_macro::unwrap_err;
 
@@ -126,4 +132,46 @@ pub fn native_fn(attrs: TokenStream, input: TokenStream) -> TokenStream {
     let attrs = parse_macro_input!(attrs as native_fn::Attrs);
     let mut item_fn = parse_macro_input!(input as ItemFn);
     native_fn_inner(&attrs, &mut item_fn).into()
+}
+
+#[proc_macro_attribute]
+pub fn generate_array_arms(attrs: TokenStream, input: TokenStream) -> TokenStream {
+    let tys = Punctuated::<Ident, Token![,]>::parse_terminated
+        .parse(attrs)
+        .unwrap();
+    let mut item_fn = parse_macro_input!(input as ItemFn);
+    for stmt in &mut item_fn.block.stmts {
+        if let Stmt::Local(Local { init, attrs, .. }) = stmt {
+            if attrs.iter().any(|attr| attr.path().is_ident("inject")) {
+                attrs.retain(|attr| !attr.path().is_ident("inject"));
+                attrs.iter().for_each(|attr| {
+                    println!("attr is: {}", attr.to_token_stream());
+                    println!("is inject: {}", attr.path().is_ident("inject"));
+                });
+                if let Some(LocalInit { expr, .. }) = init {
+                    if let Expr::Match(ExprMatch { arms, .. }) = &mut **expr {
+                        for ty in &tys {
+                            arms.push(parse_quote!(
+                            Type::#ty => ArrayValue::#ty(std::vec::Vec::with_capacity(length as usize))
+                        ));
+                        }
+                    }
+                }
+            }
+        }
+    }
+    // let result = quote! {
+    //     #item_fn
+    // };
+    // println!("result is: {}", result);
+    // result.into()
+    quote! {
+        #item_fn
+    }
+    .into()
+}
+
+#[proc_macro_attribute]
+pub fn inject(_: TokenStream, input: TokenStream) -> TokenStream {
+    input
 }

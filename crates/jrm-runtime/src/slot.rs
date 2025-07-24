@@ -1,4 +1,3 @@
-
 use crate::heap::ObjectRef;
 
 #[derive(Debug, Clone)]
@@ -97,21 +96,6 @@ impl From<ObjectRef> for Slot {
         Self::Ref(value)
     }
 }
-
-// TODO 裸指针优化
-// #[repr(transparent)]
-// #[derive(Debug)]
-// pub struct ObjectRef(NonNull<HeapObject>); // 裸指针包装
-
-// impl ObjectRef {
-//     pub fn null() -> Self {
-//         unsafe { Self(NonNull::new_unchecked(1 as *mut _)) }
-//     }
-
-//     pub fn is_null(&self) -> bool {
-//         self.0.as_ptr() as usize == 1
-//     }
-// }
 
 #[cfg(test)]
 mod tests {

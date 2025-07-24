@@ -13,8 +13,8 @@ use crate::{
     Error, Result,
     byte_reader::ByteReader,
     frame::{Frame, LocalVarsLike, OperandStackLike},
-    heap::{Heap, ObjectRef},
-    method_area::{self, MethodArea},
+    heap::{Heap, ObjectRef, array::ArrayValue},
+    method_area::MethodArea,
     slot::Slot,
 };
 
@@ -114,9 +114,9 @@ impl Thread {
 
     // helper
 
-    fn get_slot_from_constant_pool(&mut self, index: u16) -> Slot {
-        self.constant_pool
-            .get_with(index, |constant| match constant {
+    fn get_slot_from_constant_pool(&mut self, index: u16) -> Result<Slot> {
+        if let Some(constant) = self.constant_pool.get(index) {
+            let slot = match constant {
                 Constant::Integer(integer) => integer.bytes.into(),
                 Constant::Float(float) => float.bytes.into(),
                 Constant::Long(long) => (long.high_bytes, long.low_bytes).into(),
@@ -124,15 +124,22 @@ impl Thread {
                 Constant::String(string) => {
                     let ref_index = string.string_index;
                     let utf8_string = self.constant_pool.get_utf8_string(ref_index);
-                    todo!()
+                    self.new_string(utf8_string)?.into()
                 }
                 Constant::Class(class) => {
                     let ref_index = class.name_index;
                     let class_name = self.constant_pool.get_utf8_string(ref_index);
                     todo!()
                 }
-                _ => todo!(),
-            })
+                _ => return Err(Error::InnerError(format!("invalid constant: {}", constant))),
+            };
+            Ok(slot)
+        } else {
+            Err(Error::InnerError(format!(
+                "constant not found at index: {}",
+                index
+            )))
+        }
     }
 
     /// 根据lit（字面量）建一一个字符串
@@ -145,15 +152,25 @@ impl Thread {
         if let Some(object_ref) = self.heap.lock()?.get_string_ref(&lit) {
             return Ok(object_ref);
         }
-        let array_ref = match helper::get_utf8_string_type(lit) {
+
+        let (array_value, length) = match helper::get_utf8_string_type(lit) {
             helper::StringType::Latin1(bytes) => {
-                todo!()
+                let bytes: Vec<_> = bytes.into_iter().map(|byte| byte as i8).collect();
+                let length = bytes.len();
+                (ArrayValue::Byte(bytes), length)
             }
+
             helper::StringType::Utf16(utf16) => {
-                todo!()
+                let length = utf16.len();
+                (ArrayValue::Char(utf16), length)
             }
         };
-        array_ref
+
+        let object_ref = self
+            .heap
+            .lock()?
+            .allocate_array_with_value(array_value, length as i32);
+        Ok(object_ref)
     }
 }
 
@@ -202,9 +219,8 @@ mod tests {
     use rstest::{fixture, rstest};
 
     use crate::{
-        heap::Heap,
         method::Method,
-        method_area::{self, MethodArea},
+        method_area::MethodArea,
         thread::{Thread, ThreadBuilder},
     };
 

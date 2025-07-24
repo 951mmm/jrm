@@ -45,6 +45,9 @@ impl ConstantPool {
         let constant = &self.constants[index as usize];
         f(constant)
     }
+    pub fn get(&self, index: u16) -> Option<&Constant> {
+        self.constants.get(index as usize)
+    }
 }
 
 #[cfg(feature = "test")]

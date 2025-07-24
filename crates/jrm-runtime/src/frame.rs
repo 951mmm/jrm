@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use derive_builder::Builder;
 
-use crate::{Error, Result, byte_reader::ByteReader, method::Method, slot::Slot};
+use crate::{Error, Result, byte_reader::ByteReader, slot::Slot};
 #[derive(Clone)]
 pub struct OperandStack {
     stack: Vec<Slot>,
@@ -124,7 +124,6 @@ mod tests {
     use crate::{
         byte_reader::ByteReader,
         frame::{Frame, FrameBuilder, LocalVars, LocalVarsLike, OperandStack, OperandStackLike},
-        method::Method,
     };
 
     #[test]
