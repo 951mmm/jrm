@@ -79,51 +79,51 @@ pub struct InstanceKlass {
 
     major_version: u16,
 
-    #[count(set)]
-    #[constant_index(setend)]
+    #[class_parser(count(set))]
+    #[class_parser(constant_index(setend))]
     #[getter(skip)]
     constant_pool_count: u16,
 
-    #[constant_pool(set)]
+    #[class_parser(constant_pool(set))]
     constant_pool: Arc<ConstantPool>,
 
     #[hex]
     access_flags: ClassAccessFlags,
 
-    #[constant_index(check)]
+    #[class_parser(constant_index(check))]
     #[getter(copy)]
     this_class: u16,
 
-    #[constant_index(check)]
+    #[class_parser(constant_index(check))]
     #[getter(copy)]
     super_class: u16,
 
-    #[count(set)]
+    #[class_parser(count(set))]
     #[getter(skip)]
     interfaces_count: u16,
 
-    #[count(get)]
+    #[class_parser(count(get))]
     interfaces: Vec<Interface>,
 
-    #[count(set)]
+    #[class_parser(count(set))]
     #[getter(skip)]
     fields_count: u16,
 
-    #[count(get)]
+    #[class_parser(count(get))]
     fields: Vec<Field>,
 
-    #[count(set)]
+    #[class_parser(count(set))]
     #[getter(skip)]
     methods_count: u16,
 
-    #[count(get)]
+    #[class_parser(count(get))]
     methods: Vec<Method>,
 
-    #[count(set)]
+    #[class_parser(count(set))]
     #[getter(skip)]
     attributes_count: u16,
 
-    #[count(impled)]
+    #[class_parser(count(impled))]
     attributes: Vec<Attribute>,
 }
 impl InstanceKlass {
@@ -138,9 +138,9 @@ pub struct Field {
     access_flags: FieldAccessFlags,
     name_index: u16,
     descriptor_index: u16,
-    #[count(set)]
+    #[class_parser(count(set))]
     attributes_count: u16,
-    #[count(impled)]
+    #[class_parser(count(impled))]
     attributes: Vec<Attribute>,
 }
 
@@ -151,10 +151,10 @@ pub struct Method {
     name_index: u16,
     #[getter(copy)]
     descriptor_index: u16,
-    #[count(set)]
+    #[class_parser(count(set))]
     #[getter(copy)]
     attributes_count: u16,
-    #[count(impled)]
+    #[class_parser(count(impled))]
     attributes: Vec<Attribute>,
 }
 

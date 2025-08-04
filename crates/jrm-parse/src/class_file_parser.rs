@@ -8,10 +8,7 @@ use std::{
 use jrm_macro::{generate_ux, impl_class_parser_for_vec};
 use maplit::hashmap;
 
-use crate::{
-    class_reader::ClassReader,
-    constant_pool::ConstantPool,
-};
+use crate::{class_reader::ClassReader, constant_pool::ConstantPool};
 
 pub trait ContextIndex {
     type Idx;

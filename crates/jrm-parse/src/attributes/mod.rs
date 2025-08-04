@@ -25,7 +25,7 @@ impl_class_parser_for_vec! {Attribute}
 
 // TODO getter for single
 #[base_attribute(single(ident = sourcefile_index, ty = u16, constant_index_check))]
-#[derive(Debug, ClassParser)]
+#[derive(Debug, ClassParser, Getter)]
 pub struct SourceFileAttribute {}
 
 #[base_attribute(suffix(count_ident = number_of_exceptions, item_ty = ConstantClass, rename=expcetion_index_table), impled)]
@@ -33,5 +33,5 @@ pub struct SourceFileAttribute {}
 pub struct ExceptionAttribute {}
 
 #[base_attribute]
-#[derive(Debug, ClassParser)]
+#[derive(Debug, ClassParser, Getter)]
 pub struct DeprecatedAttribute {}

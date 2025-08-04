@@ -39,9 +39,16 @@ pub fn base_attrubute_inner(
     attrs: &Attrs,
     item_struct: &mut ItemStruct,
 ) -> syn::Result<proc_macro2::TokenStream> {
-    let index_field_prefix: Field =
-        parse_quote! {#[enum_entry(get)] #[constant_index(check)] pub attribute_name_index: u16};
-    let length_field_prefix: Field = parse_quote! {pub attribute_length: u32};
+    let index_field_prefix: Field = parse_quote! {
+        #[class_parser(enum_entry(get))]
+        #[class_parser(constant_index(check))]
+        #[getter(skip)]
+        attribute_name_index: u16
+    };
+    let length_field_prefix: Field = parse_quote! {
+        #[getter(skip)]
+        attribute_length: u32
+    };
     if let Fields::Named(ref mut field_named) = item_struct.fields {
         let mut new_named: Punctuated<Field, Token![,]> = Punctuated::new();
         new_named.push(index_field_prefix);
@@ -54,7 +61,11 @@ pub fn base_attrubute_inner(
         {
             new_named.push(length_field_prefix);
             new_named.extend(field_named.named.clone());
-            new_named.push(parse_quote!(#[count(set)] #[getter(skip)] #count_ident: u16));
+            new_named.push(parse_quote!(
+                #[class_parser(count(set))]
+                #[getter(skip)]
+                #count_ident: u16
+            ));
 
             let list_ident = get_suffix_list_ident(is_impled, rename.clone(), item_ty)?;
             let list_field = get_suffix_list_field(is_impled, &list_ident, item_ty)?;
@@ -69,7 +80,7 @@ pub fn base_attrubute_inner(
             let ty = build_ty_from(ty);
             let length_field_prefix = if is_collection_ty {
                 parse_quote!(
-                    #[count(set)]
+                    #[class_parser(count(set))]
                     #length_field_prefix
                 )
             } else {
@@ -78,18 +89,18 @@ pub fn base_attrubute_inner(
             new_named.push(length_field_prefix);
             let single_suffix_field = if constant_index_check.is_present() {
                 parse_quote!(
-                    #[constant_index(check)]
+                    #[class_parser(constant_index(check))]
                     #ident: #ty
                 )
             } else if is_collection_ty {
                 if is_impled {
                     parse_quote!(
-                        #[count(impled)]
+                        #[class_parser(count(impled))]
                         #ident: #ty
                     )
                 } else {
                     parse_quote!(
-                        #[count(get)]
+                        #[class_parser(count(get))]
                         #ident: #ty
                     )
                 }
@@ -150,13 +161,13 @@ fn get_suffix_list_field(
         match item_ty {
             Some(item_ty) => {
                 parse_quote!(
-                    #[count(impled)]
+                    #[class_parser(count(impled))]
                     #list_ident: Vec<#item_ty>
                 )
             }
             None => {
                 parse_quote!(
-                    #[count(impled)]
+                    #[class_parser(count(impled))]
                     #list_ident: Vec<u8>
                 )
             }
@@ -167,7 +178,7 @@ fn get_suffix_list_field(
         }
         let item_ty = item_ty.as_ref().unwrap();
         parse_quote!(
-            #[count(get)]
+            #[class_parser(count(get))]
             #list_ident: Vec<#item_ty>
         )
     };
@@ -250,10 +261,10 @@ mod tests {
     #[test]
     fn test_get_suffix_list_field() -> Result<(), Box<dyn Error>> {
         let mut results = [
-            "# [count (impled)] some_ident : Vec < SomeType >",
-            "# [count (impled)] some_ident : Vec < u8 >",
-            "# [count (get)] some_ident : Vec < SomeType >",
-            "# [count (get)] some_ident : Vec < Attribute >",
+            "# [class_parser (count (impled))] some_ident : Vec < SomeType >",
+            "# [class_parser (count (impled))] some_ident : Vec < u8 >",
+            "# [class_parser (count (get))] some_ident : Vec < SomeType >",
+            "# [class_parser (count (get))] some_ident : Vec < Attribute >",
         ]
         .iter()
         .map(ToString::to_string);
@@ -322,11 +333,11 @@ mod tests {
     fn test_base_attribute_suffix_expand() -> Result<(), Box<dyn Error>> {
         let attrs: Attrs = parse_quote!(suffix(count_ident = count, item_ty = SomeAttribute));
         let (raw_code, expanded) = base_attribute_expand(&attrs)?;
-        assert!(raw_code.contains("# [enum_entry (get)]"));
+        assert!(raw_code.contains("# [class_parser (enum_entry (get))]"));
         assert!(raw_code.contains("count : u16"));
-        assert!(raw_code.contains("pub attribute_name_index : u16"));
+        assert!(raw_code.contains("attribute_name_index : u16"));
         assert!(raw_code.contains("Vec < SomeAttribute >"));
-        assert!(raw_code.contains("# [count (get)]"));
+        assert!(raw_code.contains("# [class_parser (count (get))]"));
         print_expanded_fmt(expanded);
         Ok(())
     }
@@ -334,20 +345,22 @@ mod tests {
     fn test_base_attribute_single_expand() -> Result<(), Box<dyn Error>> {
         let attrs: Attrs = parse_quote!(single(ident = some, ty = Some, constant_index_check));
         let (raw_code, expanded) = base_attribute_expand(&attrs)?;
-        assert!(raw_code.contains("# [constant_index (check)] some : Some"));
+        assert!(raw_code.contains("# [class_parser (constant_index (check))] some : Some"));
         println!("#1");
         print_expanded_fmt(expanded);
 
         let attrs: Attrs = parse_quote!(single(ident = some, ty = "Vec<Some>"));
         let (raw_code, expanded) = base_attribute_expand(&attrs)?;
-        assert!(raw_code.contains("# [count (set)] pub attribute_length"));
-        assert!(raw_code.contains("# [count (get)]"));
+        assert!(
+            raw_code.contains("# [class_parser (count (set))] # [getter (skip)] attribute_length")
+        );
+        assert!(raw_code.contains("# [class_parser (count (get))]"));
         println!("#2");
         print_expanded_fmt(expanded);
 
         let attrs: Attrs = parse_quote!(single(ident = some, ty = "Vec<Some>"), impled);
         let (raw_code, expanded) = base_attribute_expand(&attrs)?;
-        assert!(raw_code.contains("# [count (impled)]"));
+        assert!(raw_code.contains("# [class_parser (count (impled))]"));
         println!("#3");
         print_expanded_fmt(expanded);
         Ok(())

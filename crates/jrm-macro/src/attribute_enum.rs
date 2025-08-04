@@ -14,7 +14,7 @@ pub fn attribute_enum_inner(ast: &Ast) -> proc_macro2::TokenStream {
 
     quote! {
         #[derive(Debug, ClassParser)]
-        #[enum_entry(index(constant_pool[u16]))]
+        #[class_parser(enum_entry(index(constant_pool[u16])))]
         pub enum Attribute {
             #(#variants),*
         }

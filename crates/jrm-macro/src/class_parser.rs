@@ -1,7 +1,7 @@
 use quote::{format_ident, quote};
 use syn::{
     Attribute, Fields, FieldsNamed, FieldsUnnamed, GenericArgument, Ident, Item, ItemEnum,
-    ItemStruct, PathArguments, Type, TypePath, bracketed, parenthesized,
+    ItemStruct, MetaList, PathArguments, Type, TypePath, bracketed, parenthesized,
 };
 
 use base_macro::{attr_enum, simple_field_attr, syn_err};
@@ -250,19 +250,19 @@ fn resolve_unnamed(
     Ok(result)
 }
 
-#[attr_enum]
+#[attr_enum(class_parser)]
 enum ConstantPool {
     Set,
     Read,
 }
 
-#[attr_enum]
+#[attr_enum(class_parser)]
 enum ConstantIndex {
     Setend,
     Check,
 }
 
-#[attr_enum]
+#[attr_enum(class_parser)]
 enum Count {
     Set,
     Get,
@@ -275,34 +275,58 @@ enum EnumEntry {
     None,
 }
 
-fn attr_enum_entry(attrs: &Vec<Attribute>) -> syn::Result<EnumEntry> {
+fn attr_enum_entry(attrs: &[Attribute]) -> syn::Result<EnumEntry> {
     let mut enum_entry = EnumEntry::None;
-    for attr in attrs {
-        if attr.path().is_ident("enum_entry") {
-            attr.parse_nested_meta(|meta| {
-                // #[enum_entry(get)]
-                if meta.path.is_ident("get") {
-                    enum_entry = EnumEntry::Get;
-                    return Ok(());
-                }
-                // #[enum_entry(index(map[ty]))]
-                if meta.path.is_ident("index") {
-                    let content;
-                    parenthesized!(content in meta.input);
-                    let ident: Ident = content.parse()?;
-                    let content_in_square;
-                    bracketed!(content_in_square in content);
-                    let ty: Type = content_in_square.parse()?;
-                    enum_entry = EnumEntry::Index {
-                        index_ty: ty,
-                        map_ident: ident,
-                    };
-                    return Ok(());
-                }
-                Err(meta.error("unrecongnized enum_entry"))
-            })?;
-        }
+    let meta_list = extract_attr_meta_list(attrs, "enum_entry")?;
+    if meta_list.is_none() {
+        return Ok(enum_entry);
     }
+    meta_list.unwrap().parse_nested_meta(|meta| {
+        // #[enum_entry(get)]
+        if meta.path.is_ident("get") {
+            enum_entry = EnumEntry::Get;
+            return Ok(());
+        }
+        // #[enum_entry(index(map[ty]))]
+        if meta.path.is_ident("index") {
+            let content;
+            parenthesized!(content in meta.input);
+            let ident: Ident = content.parse()?;
+            let content_in_square;
+            bracketed!(content_in_square in content);
+            let ty: Type = content_in_square.parse()?;
+            enum_entry = EnumEntry::Index {
+                index_ty: ty,
+                map_ident: ident,
+            };
+            return Ok(());
+        }
+        Err(meta.error("unrecongnized enum_entry"))
+    })?;
+    // if attr.path().is_ident("enum_entry") {
+    //     attr.parse_nested_meta(|meta| {
+    //         // #[enum_entry(get)]
+    //         if meta.path.is_ident("get") {
+    //             enum_entry = EnumEntry::Get;
+    //             return Ok(());
+    //         }
+    //         // #[enum_entry(index(map[ty]))]
+    //         if meta.path.is_ident("index") {
+    //             let content;
+    //             parenthesized!(content in meta.input);
+    //             let ident: Ident = content.parse()?;
+    //             let content_in_square;
+    //             bracketed!(content_in_square in content);
+    //             let ty: Type = content_in_square.parse()?;
+    //             enum_entry = EnumEntry::Index {
+    //                 index_ty: ty,
+    //                 map_ident: ident,
+    //             };
+    //             return Ok(());
+    //         }
+    //         Err(meta.error("unrecongnized enum_entry"))
+    //     })?;
+    // }
     Ok(enum_entry)
 }
 
@@ -365,7 +389,22 @@ fn get_inner_ty(ty: &Type) -> syn::Result<&Type> {
             }
         }
     }
-    syn_err! {ty, "Invalid inner type for Vec"};
+    syn_err! {ty, "invalid inner type for Vec"};
+}
+
+fn extract_attr_meta_list<'a>(
+    attrs: &'a [Attribute],
+    meta_list_str: &'a str,
+) -> syn::Result<Option<MetaList>> {
+    for attr in attrs {
+        if attr.path().is_ident("class_parser") {
+            let meta_list: MetaList = attr.parse_args()?;
+            if meta_list.path.is_ident(meta_list_str) {
+                return Ok(Some(meta_list));
+            }
+        }
+    }
+    Ok(None)
 }
 
 #[cfg(test)]
@@ -388,7 +427,7 @@ mod tests {
             #[derive(ClassParser)]
             struct TestStruct {
                 a: u8,
-                #[constant_pool(set)]
+                #[class_parser(constant_pool(set))]
                 b: ConstantPool,
             }
         );
@@ -402,8 +441,8 @@ mod tests {
     #[test]
     fn test_attr_enum_entry() -> Result<(), Box<dyn Error>> {
         let attrs = vec![
-            parse_quote!(#[enum_entry(get)]),
-            parse_quote!(#[enum_entry(index(map[u8]))]),
+            parse_quote!(#[class_parser(enum_entry(get))]),
+            parse_quote!(#[class_parser(enum_entry(index(map[u8])))]),
         ];
 
         let mut results = attrs.iter().cloned().map(|attr| {
@@ -471,7 +510,7 @@ mod tests {
     #[test]
     fn test_resolve_enum_expand() -> Result<(), Box<dyn Error>> {
         let code: ItemEnum = parse_quote! {
-            #[enum_entry(index(map[u8]))]
+            #[class_parser(enum_entry(index(map[u8])))]
             enum TestEnum {
                 A(a),
                 B

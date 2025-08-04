@@ -7,8 +7,8 @@ use jrm_macro::{ClassParser, Getter, constant, constant_enum, define_constants};
 #[derive(ClassParser, Default)]
 pub struct ConstantPool {
     // meta
-    #[count(get)]
-    #[constant_pool(read)]
+    #[class_parser(count(get))]
+    #[class_parser(constant_pool(read))]
     constants: Vec<Constant>,
 }
 impl Debug for ConstantPool {
@@ -112,9 +112,9 @@ impl TryFrom<&Constant> for String {
 
 define_constants! {
     pub struct ConstantUtf8 {
-        #[count(set)]
+        #[class_parser(count(set))]
         length: u16,
-        #[count(impled)]
+        #[class_parser(count(impled))]
         bytes: Vec<u8>,
     }
     #[constant(one_word)]
@@ -126,12 +126,12 @@ define_constants! {
     #[constant(two_words)]
     pub struct ConstantDouble {}
     pub struct ConstantClass {
-        #[constant_index(check)]
+        #[class_parser(constant_index(check))]
         #[getter(copy)]
         name_index: u16,
     }
     pub struct ConstantString {
-        #[constant_index(check)]
+        #[class_parser(constant_index(check))]
         #[getter(copy)]
         string_index: u16,
     }
@@ -142,22 +142,24 @@ define_constants! {
     #[constant(__ref)]
     pub struct ConstantInterfaceMethodRef {}
     pub struct ConstantNameAndType {
-        #[constant_index(check)]
+        #[class_parser(constant_index(check))]
         #[getter(copy)]
         name_index: u16,
-        #[constant_index(check)]
+
+        #[class_parser(constant_index(check))]
         #[getter(copy)]
         descriptor_index: u16,
     }
     pub struct ConstantMethodHandle {
         #[getter(copy)]
         reference_kind: u8,
-        #[constant_index(check)]
+
+        #[class_parser(constant_index(check))]
         #[getter(copy)]
         reference_index: u16,
     }
     pub struct ConstantMethodType {
-        #[constant_index(check)]
+        #[class_parser(constant_index(check))]
         #[getter(copy)]
         descriptor_index: u16,
     }

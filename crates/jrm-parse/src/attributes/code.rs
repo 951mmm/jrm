@@ -12,18 +12,18 @@ pub struct CodeAttribute {
     #[getter(copy)]
     max_locals: u16,
 
-    #[count(set)]
+    #[class_parser(count(set))]
     #[getter(skip)]
     code_length: u32,
 
-    #[count(impled)]
+    #[class_parser(count(impled))]
     code: Vec<u8>,
 
-    #[count(set)]
+    #[class_parser(count(set))]
     #[getter(skip)]
     exception_table_length: u16,
 
-    #[count(get)]
+    #[class_parser(count(get))]
     exception_table: Vec<Exception>,
 }
 

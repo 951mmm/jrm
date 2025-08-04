@@ -12,7 +12,7 @@ pub fn constant_enum_inner(ast: &build_enum_input::Ast) -> proc_macro2::TokenStr
 
     quote! {
         #[derive(Clone, Debug, ClassParser)]
-        #[enum_entry(index(constant_tag_map[u8]))]
+        #[class_parser(enum_entry(index(constant_tag_map[u8])))]
         pub enum Constant {
             #(#variants,)*
             Invalid

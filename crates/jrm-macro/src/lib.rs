@@ -78,7 +78,7 @@ pub fn klass_debug_derive(input: TokenStream) -> TokenStream {
 ///         Class(ConstantClass)
 ///     }
 ///
-///     #[derive]
+///     #[derive(ClassParser)]
 ///     struct ConstantClass {
 ///         #[enum_entry(get)]
 ///         pub tag: u8
@@ -101,10 +101,7 @@ pub fn klass_debug_derive(input: TokenStream) -> TokenStream {
 ///         ...
 ///     }
 ///     ```
-#[proc_macro_derive(
-    ClassParser,
-    attributes(count, constant_pool, constant_index, enum_entry, skip)
-)]
+#[proc_macro_derive(ClassParser, attributes(class_parser))]
 pub fn class_file_parse_derive(input: TokenStream) -> TokenStream {
     let ast = parse_macro_input!(input as Item);
     unwrap_err!(class_file_parse_derive_inner(&ast))
