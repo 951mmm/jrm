@@ -54,7 +54,7 @@ pub fn base_attrubute_inner(
         {
             new_named.push(length_field_prefix);
             new_named.extend(field_named.named.clone());
-            new_named.push(parse_quote!(#[count(set)] #count_ident: u16));
+            new_named.push(parse_quote!(#[count(set)] #[getter(skip)] #count_ident: u16));
 
             let list_ident = get_suffix_list_ident(is_impled, rename.clone(), item_ty)?;
             let list_field = get_suffix_list_field(is_impled, &list_ident, item_ty)?;
@@ -104,7 +104,6 @@ pub fn base_attrubute_inner(
         }
         field_named.named = new_named;
     }
-
     Ok(quote! {
         #item_struct
     })
@@ -152,13 +151,13 @@ fn get_suffix_list_field(
             Some(item_ty) => {
                 parse_quote!(
                     #[count(impled)]
-                    pub #list_ident: Vec<#item_ty>
+                    #list_ident: Vec<#item_ty>
                 )
             }
             None => {
                 parse_quote!(
                     #[count(impled)]
-                    pub #list_ident: Vec<u8>
+                    #list_ident: Vec<u8>
                 )
             }
         }
@@ -169,7 +168,7 @@ fn get_suffix_list_field(
         let item_ty = item_ty.as_ref().unwrap();
         parse_quote!(
             #[count(get)]
-            pub #list_ident: Vec<#item_ty>
+            #list_ident: Vec<#item_ty>
         )
     };
     Ok(result)

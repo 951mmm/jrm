@@ -1,16 +1,15 @@
 pub mod array;
 pub mod instance;
 
-use std::{collections::HashMap, sync::Arc};
+use std::collections::HashMap;
 
 use indexmap::IndexMap;
 
 use instance::Instance;
-use jrm_macro::{generate_array_arms, inject};
+use jrm_macro::generate_array_arms;
 
 use crate::{
     Error, Result, Type,
-    class::Class,
     heap::array::{Array, ArrayValue},
 };
 
@@ -19,6 +18,7 @@ pub struct Heap {
     address: i32,
     data: IndexMap<i32, HeapValue>,
     string_pool: HashMap<String, ObjectRef>,
+    reflection_table: HashMap<ObjectRef, ObjectRef>,
 }
 
 impl Heap {
@@ -49,7 +49,7 @@ impl Heap {
         }
         #[inject]
         let array_value = match item_ty {
-            Type::Ref => ArrayValue::Ref(vec![ObjectRef::null(); length as usize]),
+            Type::Ref { .. } => ArrayValue::Ref(vec![ObjectRef::null(); length as usize]),
             Type::Array(inner_ty) => {
                 if dimensions.len() > 1 {
                     let array_ref = (0..length).try_rfold::<_, _, Result<Vec<_>>>(
@@ -66,6 +66,9 @@ impl Heap {
                         "invalid dimension number for nested array".to_string(),
                     ));
                 }
+            }
+            Type::Void => {
+                return Err(Error::HeapError("invalid inner type `void`".to_string()));
             }
         };
 

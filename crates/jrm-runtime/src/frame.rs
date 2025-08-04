@@ -45,12 +45,20 @@ pub trait LocalVarsLike {
 pub struct LocalVars {
     local_vars: Vec<Slot>,
 }
+
 impl LocalVarsLike for LocalVars {
     fn get<T: From<Slot>>(&self, index: usize) -> Result<T> {
         todo!()
     }
     fn set<T: Into<Slot>>(&mut self, index: usize, operand: T) -> Result<()> {
         todo!()
+    }
+}
+
+impl LocalVars {
+    #[cfg(test)]
+    pub fn new() -> Self {
+        Self { local_vars: vec![] }
     }
 }
 
@@ -104,6 +112,13 @@ impl ByteReader for Frame {
             .copied()
             .ok_or(Error::StackError("invalid pc".to_string()))? as u16;
         Ok(high << 8 | low)
+    }
+}
+
+#[cfg(test)]
+impl Frame {
+    pub fn set_code(&mut self, code: Vec<u8>) {
+        self.code = Arc::new(code)
     }
 }
 

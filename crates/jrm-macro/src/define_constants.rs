@@ -16,11 +16,12 @@ impl Parse for Ast {
 pub fn define_constants_inner(structs: &mut Vec<ItemStruct>) -> proc_macro2::TokenStream {
     let prefix: Field = parse_quote!(
         #[enum_entry(get)]
-        pub tag: u8
+        #[getter(skip)]
+         tag: u8
     );
     for item_struct in structs.iter_mut() {
         item_struct.attrs.push(parse_quote!(
-            #[derive(Clone, Debug, ClassParser)]
+            #[derive(Clone, Debug, ClassParser, Getter)]
         ));
         if let Fields::Named(ref mut fields_named) = item_struct.fields {
             let mut new_named: Punctuated<Field, Token![,]> = Punctuated::new();
@@ -69,9 +70,9 @@ mod tests {
         let mut ast: define_constants::Ast = parse_str(code)?;
         let expanded = define_constants_inner(&mut ast.structs);
         let raw_code = expanded.to_string();
-        assert!(raw_code.contains("pub tag : u8 , A : i32"));
-        assert!(raw_code.contains("pub tag : u8 , B : u8"));
-        assert!(raw_code.contains("# [derive (Clone , Debug , ClassParser)]"));
+        assert!(raw_code.contains("tag : u8 , A : i32"));
+        assert!(raw_code.contains("tag : u8 , B : u8"));
+        assert!(raw_code.contains("# [derive (Clone , Debug , ClassParser , Getter)]"));
         print_expanded_fmt(expanded);
         Ok(())
     }

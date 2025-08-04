@@ -5,7 +5,7 @@ use bitflags::{Flags, bitflags};
 use crate::attributes::Attribute;
 use crate::class_file_parser::{ClassParser, ParserContext};
 use crate::constant_pool::{ConstantClass, ConstantPool};
-use jrm_macro::{ClassParser, KlassDebug};
+use jrm_macro::{ClassParser, Getter, KlassDebug};
 
 bitflags! {
     #[derive(Debug, Clone, Copy)]
@@ -69,98 +69,68 @@ impl_class_parser_for_bitflags!(ClassAccessFlags, u16);
 impl_class_parser_for_bitflags!(FieldAccessFlags, u16);
 impl_class_parser_for_bitflags!(MethodAccessFlags, u16);
 
-#[derive(KlassDebug, ClassParser)]
+#[derive(KlassDebug, ClassParser, Getter)]
 pub struct InstanceKlass {
     #[hex]
+    #[getter(skip)]
     magic: u32,
+
     minor_version: u16,
+
     major_version: u16,
+
     #[count(set)]
     #[constant_index(setend)]
+    #[getter(skip)]
     constant_pool_count: u16,
+
     #[constant_pool(set)]
     constant_pool: Arc<ConstantPool>,
+
     #[hex]
     access_flags: ClassAccessFlags,
+
     #[constant_index(check)]
+    #[getter(copy)]
     this_class: u16,
+
     #[constant_index(check)]
+    #[getter(copy)]
     super_class: u16,
+
     #[count(set)]
+    #[getter(skip)]
     interfaces_count: u16,
+
     #[count(get)]
     interfaces: Vec<Interface>,
+
     #[count(set)]
+    #[getter(skip)]
     fields_count: u16,
+
     #[count(get)]
     fields: Vec<Field>,
+
     #[count(set)]
+    #[getter(skip)]
     methods_count: u16,
+
     #[count(get)]
     methods: Vec<Method>,
+
     #[count(set)]
+    #[getter(skip)]
     attributes_count: u16,
+
     #[count(impled)]
     attributes: Vec<Attribute>,
 }
 impl InstanceKlass {
-    pub fn find_method_with<F, T>(&self, name: &str, descriptor: &str, f: F) -> T
-    where
-        F: FnOnce(&Method) -> T,
-    {
-        unsafe {
-            self.methods
-                .iter()
-                .find(|method| {
-                    let method_name = self.constant_pool.get_utf8_string(method.name_index);
-                    let method_descriptor =
-                        self.constant_pool.get_utf8_string(method.descriptor_index);
-                    method_name == name && method_descriptor == descriptor
-                })
-                .map(f)
-                .unwrap_unchecked()
-        }
+    pub fn parse_from_bytes(bytes: Vec<u8>) -> anyhow::Result<Self> {
+        let mut ctx = ParserContext::from(bytes);
+        Self::parse(&mut ctx)
     }
-    //     pub fn find_method(&self, name: &str, descriptor: &str) -> runtime::Method {
-    //         let mut max_locals = None;
-    //         let mut max_stack = None;
-    //         let mut code = None;
-    //         let mut access_flags = None;
-    //         unsafe {
-    //             self.methods
-    //                 .iter()
-    //                 .find(|method| {
-    //                     let method_name = self.constant_pool.get_utf8_string(method.name_index);
-    //                     let method_descriptor =
-    //                         self.constant_pool.get_utf8_string(method.descriptor_index);
-    //                     method_name == name || method_descriptor == descriptor
-    //                 })
-    //                 .map(|method| {
-    //                     access_flags = Some(method.access_flags);
-    //                     &method.attributes
-    //                 })
-    //                 .unwrap_unchecked()
-    //                 .iter()
-    //                 .for_each(|attr| {
-    //                     if let Attribute::Code(code_attr) = attr {
-    //                         max_locals = Some(code_attr.max_locals);
-    //                         max_stack = Some(code_attr.max_stack);
-    //                         code = Some(&code_attr.code);
-    //                     }
-    //                 });
-    //             runtime::Method {
-    //                 name: name.to_string(),
-    //                 descriptor: descriptor.to_string(),
-    //                 max_locals: max_locals.unwrap_unchecked().clone(),
-    //                 max_stack: max_stack.unwrap_unchecked().clone(),
-    //                 code: code.unwrap_unchecked().clone(),
-    //                 access_flags: access_flags.unwrap_unchecked().clone(),
-    //             }
-    //         }
-    //     }
-    //     pub fn get_constant_pool(&self) -> Arc<ConstantPool> {
-    //         self.constant_pool.clone()
-    //     }
 }
 type Interface = ConstantClass;
 #[derive(Debug, ClassParser)]
@@ -174,13 +144,31 @@ pub struct Field {
     attributes: Vec<Attribute>,
 }
 
-#[derive(Debug, ClassParser)]
+#[derive(Debug, ClassParser, Getter)]
 pub struct Method {
-    pub access_flags: MethodAccessFlags,
-    pub name_index: u16,
-    pub descriptor_index: u16,
+    access_flags: MethodAccessFlags,
+    #[getter(copy)]
+    name_index: u16,
+    #[getter(copy)]
+    descriptor_index: u16,
     #[count(set)]
-    pub attributes_count: u16,
+    #[getter(copy)]
+    attributes_count: u16,
     #[count(impled)]
-    pub attributes: Vec<Attribute>,
+    attributes: Vec<Attribute>,
+}
+
+#[cfg(test)]
+mod tests {
+    use jrm_macro::Getter;
+
+    #[test]
+    fn test_getter() {
+        #[derive(Getter)]
+        pub struct Test {
+            code: i32,
+        }
+        let test = Test { code: 4 };
+        assert_eq!(test.get_code(), &4);
+    }
 }

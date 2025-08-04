@@ -13,7 +13,7 @@ use crate::{
     Error, Result,
     byte_reader::ByteReader,
     frame::{Frame, LocalVarsLike, OperandStackLike},
-    heap::{Heap, ObjectRef, array::ArrayValue},
+    heap::{Heap, ObjectRef, array::ArrayValue, instance::FieldValue},
     method_area::MethodArea,
     slot::Slot,
 };
@@ -122,16 +122,22 @@ impl Thread {
                 Constant::Long(long) => (long.high_bytes, long.low_bytes).into(),
                 Constant::Double(double) => (double.high_bytes, double.low_bytes).into(),
                 Constant::String(string) => {
-                    let ref_index = string.string_index;
+                    let ref_index = string.get_string_index();
                     let utf8_string = self.constant_pool.get_utf8_string(ref_index);
-                    self.new_string(utf8_string)?.into()
+                    self.get_or_create_string_ref(utf8_string)?.into()
                 }
                 Constant::Class(class) => {
-                    let ref_index = class.name_index;
+                    let ref_index = class.get_name_index();
                     let class_name = self.constant_pool.get_utf8_string(ref_index);
+
                     todo!()
                 }
-                _ => return Err(Error::InnerError(format!("invalid constant: {}", constant))),
+                _ => {
+                    return Err(Error::InnerError(format!(
+                        "invalid constant: {:?}",
+                        constant
+                    )));
+                }
             };
             Ok(slot)
         } else {
@@ -148,29 +154,41 @@ impl Thread {
     /// 如果需要，根据class创建新的实例
     /// 然后设置value和coder字段
     /// value字段是一个字符数组
-    fn new_string(&mut self, lit: String) -> Result<ObjectRef> {
+    fn get_or_create_string_ref(&mut self, lit: String) -> Result<ObjectRef> {
         if let Some(object_ref) = self.heap.lock()?.get_string_ref(&lit) {
             return Ok(object_ref);
         }
 
-        let (array_value, length) = match helper::get_utf8_string_type(lit) {
+        let (array_value, length, coder) = match helper::get_utf8_string_type(lit) {
             helper::StringType::Latin1(bytes) => {
                 let bytes: Vec<_> = bytes.into_iter().map(|byte| byte as i8).collect();
                 let length = bytes.len();
-                (ArrayValue::Byte(bytes), length)
+                (ArrayValue::Byte(bytes), length, 0)
             }
 
             helper::StringType::Utf16(utf16) => {
                 let length = utf16.len();
-                (ArrayValue::Char(utf16), length)
+                (ArrayValue::Char(utf16), length, 1)
             }
         };
 
-        let object_ref = self
+        let coder = FieldValue::Byte(coder);
+
+        let array_ref = self
             .heap
             .lock()?
             .allocate_array_with_value(array_value, length as i32);
-        Ok(object_ref)
+
+        todo!()
+    }
+
+    /// 创建字符串对象
+    ///
+    /// 加载String类
+    /// 设置类的字段
+    fn create_string_ref(&mut self) -> Result<ObjectRef> {
+        const STRING_DESCRIPTOR: &str = "LJava/lang/String";
+        todo!()
     }
 }
 
@@ -188,10 +206,24 @@ define_instructions! {
     // ...
     0x18 => ldc {
         fn ldc() {
-            let index = self.read_u1()? as usize;
-
+            self.inc_pc(1)?;
+            let index = self.read_u1()? as u16;
+            let slot = self.get_slot_from_constant_pool(index)?;
+            self.push(slot)?;
+            self.inc_pc(1)?;
             // 如果是字符串，就存到string_pool中
         }
+    }
+}
+
+#[cfg(test)]
+impl Thread {
+    pub fn set_stack(&mut self, stack: Vec<Frame>) {
+        let stack = Rc::new(RefCell::new(stack));
+        self.stack = stack;
+    }
+    pub fn set_code(&mut self, code: Vec<u8>) {
+        self.current_frame_mut().unwrap().set_code(code);
     }
 }
 
@@ -213,31 +245,49 @@ mod helper {
 
 #[cfg(test)]
 mod tests {
-    use std::sync::{Arc, Mutex};
+    use std::{
+        cell::RefCell,
+        path::Path,
+        rc::Rc,
+        sync::{Arc, Mutex},
+    };
 
-    use jrm_parse::{Constant, ConstantClass, ConstantPool};
+    use jrm_parse::{Constant, ConstantClass, ConstantPool, ConstantString};
     use rstest::{fixture, rstest};
 
     use crate::{
-        method::Method,
+        frame::{FrameBuilder, LocalVars, OperandStack},
         method_area::MethodArea,
-        thread::{Thread, ThreadBuilder},
+        thread::{Thread, ThreadBuilder, ThreadState},
     };
 
     #[fixture]
     fn thread() -> Thread {
         let constant_pool = ConstantPool::from(vec![
             Constant::Invalid,
-            Constant::Class(ConstantClass::new(2)),
+            Constant::Class(ConstantClass::new(4)),
+            Constant::String(ConstantString::new(3)),
             Constant::from("some string".to_string()),
         ]);
+        let frame = FrameBuilder::default()
+            .pc(0)
+            .operand_stack(OperandStack::new(10))
+            .locals(LocalVars::new())
+            .code(Arc::new(vec![0x00]))
+            .current_class_name(Arc::new("Object".to_string()))
+            .build()
+            .unwrap();
+        let stack = Rc::new(RefCell::new(vec![frame]));
         let constant_pool = Arc::new(constant_pool);
 
-        let method = Method::with_max_stack(100);
-
-        let method_area = Arc::new(Mutex::new(MethodArea::new()));
-        ThreadBuilder::create_empty()
+        let method_area = Arc::new(Mutex::new(
+            MethodArea::new(Path::new(env!("JAVA_HOME"))).unwrap(),
+        ));
+        ThreadBuilder::default()
             .id(0)
+            .stack(stack)
+            .heap(Default::default())
+            .state(ThreadState::Running)
             .constant_pool(constant_pool)
             .method_area(method_area)
             .build()
@@ -245,31 +295,19 @@ mod tests {
     }
 
     #[rstest]
-    fn test_constant_pool_get_with(thread: Thread) {
-        let class = thread.constant_pool.get_with(1, |class| {
-            if let Constant::Class(class) = class {
-                let ref_index = class.name_index;
-                let class_name = thread.constant_pool.get_utf8_string(ref_index);
-                // let class = thread.heap.get_mut().unwrap().allocate()
-            }
-            todo!()
-        });
-    }
-
-    #[rstest]
-    fn test_thread_frame(thread: Thread) {
-        assert_eq!(thread.id, 0);
-    }
-    #[rstest]
     fn test_nop(mut thread: Thread) {
         thread.execute_nop().unwrap();
         assert_eq!(thread.current_frame().unwrap().pc, 1);
     }
-
     #[rstest]
     fn test_iconst_m1(mut thread: Thread) {
         thread.execute_iconst_m1().unwrap();
         assert_eq!(thread.current_frame().unwrap().pc, 1);
         assert_eq!(thread.current_frame().unwrap().top::<i32>(), -1)
+    }
+    #[rstest]
+    fn test_ldc_string(mut thread: Thread) {
+        thread.set_code(vec![0x00, 0x02]);
+        thread.execute_ldc().unwrap();
     }
 }

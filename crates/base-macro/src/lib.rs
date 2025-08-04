@@ -172,7 +172,7 @@ mod tests {
         let ast: SynErr = parse_quote!("some parse err");
         let expanded = syn_err_inner(&ast);
         let raw_code = expanded.to_string();
-        assert!(raw_code.contains("Span :: call_site"));
+        assert!(raw_code.contains("Span :: mixed_site ()"));
         println!("{}", expanded);
     }
 }

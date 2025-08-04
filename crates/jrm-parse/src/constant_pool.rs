@@ -2,7 +2,7 @@ use std::{fmt::Debug, hint::unreachable_unchecked};
 
 use crate::class_file_parser::{ClassParser, ContextIndex, ParserContext};
 use anyhow::bail;
-use jrm_macro::{ClassParser, constant, constant_enum, define_constants};
+use jrm_macro::{ClassParser, Getter, constant, constant_enum, define_constants};
 
 #[derive(ClassParser, Default)]
 pub struct ConstantPool {
@@ -32,6 +32,7 @@ impl ContextIndex for ConstantPool {
 }
 
 impl ConstantPool {
+    // TODO safe
     pub fn get_utf8_string(&self, index: u16) -> String {
         if let Constant::Utf8(utf8) = self.constants[index as usize].clone() {
             return String::from(utf8);
@@ -112,9 +113,9 @@ impl TryFrom<&Constant> for String {
 define_constants! {
     pub struct ConstantUtf8 {
         #[count(set)]
-        pub length: u16,
+        length: u16,
         #[count(impled)]
-        pub bytes: Vec<u8>,
+        bytes: Vec<u8>,
     }
     #[constant(one_word)]
     pub struct ConstantInteger {}
@@ -126,11 +127,13 @@ define_constants! {
     pub struct ConstantDouble {}
     pub struct ConstantClass {
         #[constant_index(check)]
-        pub name_index: u16,
+        #[getter(copy)]
+        name_index: u16,
     }
     pub struct ConstantString {
         #[constant_index(check)]
-        pub string_index: u16,
+        #[getter(copy)]
+        string_index: u16,
     }
     #[constant(__ref)]
     pub struct ConstantFieldRef {}
@@ -140,18 +143,23 @@ define_constants! {
     pub struct ConstantInterfaceMethodRef {}
     pub struct ConstantNameAndType {
         #[constant_index(check)]
-        pub name_index: u16,
+        #[getter(copy)]
+        name_index: u16,
         #[constant_index(check)]
-        pub descriptor_index: u16,
+        #[getter(copy)]
+        descriptor_index: u16,
     }
     pub struct ConstantMethodHandle {
-        pub reference_kind: u8,
+        #[getter(copy)]
+        reference_kind: u8,
         #[constant_index(check)]
-        pub reference_index: u16,
+        #[getter(copy)]
+        reference_index: u16,
     }
     pub struct ConstantMethodType {
         #[constant_index(check)]
-        pub descriptor_index: u16,
+        #[getter(copy)]
+        descriptor_index: u16,
     }
     #[constant(dynamic)]
     pub struct ConstantDynamic {}
@@ -185,6 +193,16 @@ impl From<String> for ConstantUtf8 {
 impl ConstantClass {
     pub fn new(name_index: u16) -> Self {
         Self { tag: 0, name_index }
+    }
+}
+
+#[cfg(feature = "test")]
+impl ConstantString {
+    pub fn new(string_index: u16) -> Self {
+        Self {
+            tag: 0,
+            string_index,
+        }
     }
 }
 
@@ -237,5 +255,9 @@ mod tests {
         let constant_pool = test_constant_pool();
         let utf8_string = constant_pool.get_utf8_string(1);
         assert_eq!(utf8_string, "aaaa");
+    }
+    #[test]
+    fn test_constant_class_getter() {
+        let constant_class = ConstantClass::new(1);
     }
 }

@@ -1,6 +1,9 @@
 use jrm_parse::instance_klass::FieldAccessFlags;
 
-use crate::heap::{ObjectHeader, ObjectRef};
+use crate::{
+    Type,
+    heap::{ObjectHeader, ObjectRef},
+};
 
 // TODO 紧凑内存布局实现？由于堆没有使用连续空间，因此不需要紧凑内存布局。
 /// java instsance,保存在堆上
@@ -10,10 +13,12 @@ pub struct Instance {
     fields: Vec<Field>,
 }
 
+impl Instance {}
+
 #[derive(Debug)]
 pub struct Field {
     name: String,
-    descriptor: String,
+    descriptor: Type,
     value: FieldValue,
     is_static: bool,
     access_flag: FieldAccessFlags,

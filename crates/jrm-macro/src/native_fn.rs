@@ -21,13 +21,13 @@ pub fn native_fn_inner(attrs: &Attrs, item_fn: &mut ItemFn) -> proc_macro2::Toke
 
 #[cfg(test)]
 mod tests {
-    
 
     use crate::native_fn::Attrs;
 
     #[test]
     fn test_attrs() {
-        let prefix = "prefix = \"aaa\"";
+        let prefix = "class_path = \"aaa\"";
         let attrs: Attrs = syn::parse_str(prefix).unwrap();
+        assert_eq!(attrs.class_path, "aaa");
     }
 }

@@ -1,9 +1,8 @@
 use quote::ToTokens;
 use syn::{Type, TypePath};
 
-/**
- * 不会解析泛型，只解析最外层
- */
+/// 不提取泛型，只提取最外层
+/// some::A<B> -> B
 pub fn try_extract_outer_ty_string(ty: &Type) -> syn::Result<String> {
     let err = Err(syn::Error::new_spanned(
         ty,
@@ -20,6 +19,7 @@ pub fn try_extract_outer_ty_string(ty: &Type) -> syn::Result<String> {
         _ => err,
     }
 }
+
 #[cfg(test)]
 mod tests {
     use std::error::Error;

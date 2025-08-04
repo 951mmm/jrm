@@ -1,7 +1,7 @@
 use quote::{format_ident, quote};
 use syn::{
-    Attribute, Fields, FieldsNamed, FieldsUnnamed, GenericArgument, Ident, Item,
-    ItemEnum, ItemStruct, PathArguments, Type, TypePath, bracketed, parenthesized,
+    Attribute, Fields, FieldsNamed, FieldsUnnamed, GenericArgument, Ident, Item, ItemEnum,
+    ItemStruct, PathArguments, Type, TypePath, bracketed, parenthesized,
 };
 
 use base_macro::{attr_enum, simple_field_attr, syn_err};
@@ -480,7 +480,7 @@ mod tests {
         let expanded = resolve_enum(&code)?;
         let raw_code = expanded.to_string();
         assert!(raw_code.contains("let index = "));
-        assert!(raw_code.contains("ContextIndex :: get (& ctx . map , index) ? ;"));
+        assert!(raw_code.contains("ContextIndex :: get (& ctx . map , index) ;"));
         print_expanded_fmt(expanded);
         Ok(())
     }
