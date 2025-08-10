@@ -1,5 +1,5 @@
-use base_macro::syn_err;
 use darling::{FromField, util::Flag};
+use macro_utils::syn_err;
 use quote::{format_ident, quote};
 use syn::{Data, DataStruct, DeriveInput, Fields, FieldsNamed};
 

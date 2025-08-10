@@ -1,4 +1,3 @@
-mod allocate_array_arms;
 mod attribute_enum;
 mod base_attribute;
 mod build_enum_input;
@@ -11,6 +10,7 @@ mod getter;
 mod impl_class_parser_for_vec;
 mod klass_debug;
 mod native_fn;
+mod parse_variant;
 mod utils;
 
 use proc_macro::TokenStream;
@@ -18,16 +18,16 @@ use quote::{ToTokens, quote};
 use syn::parse::Parser;
 use syn::punctuated::Punctuated;
 use syn::{
-    DeriveInput, Expr, ExprMatch, Ident, Item, ItemFn, ItemStruct, Local, LocalInit, Stmt, Token,
-    Type, parse_macro_input, parse_quote,
+    DeriveInput, Expr, ExprMatch, Ident, Item, ItemEnum, ItemFn, ItemStruct, Local, LocalInit,
+    Stmt, Token, Type, parse_macro_input, parse_quote,
 };
 
-use base_macro::unwrap_err;
+use macro_utils::unwrap_err;
 
 use crate::attribute_enum::attribute_enum_inner;
 use crate::base_attribute::base_attrubute_inner;
 use crate::build_enum_input::generate_parse_cast_impl;
-use crate::class_parser::class_file_parse_derive_inner;
+use crate::class_parser::derive_class_parser_inner;
 use crate::constant::constant_inner;
 use crate::constant_enum::constant_enum_inner;
 use crate::define_constants::define_constants_inner;
@@ -36,6 +36,7 @@ use crate::getter::derive_getter_inner;
 use crate::impl_class_parser_for_vec::impl_class_parser_for_vec_inner;
 use crate::klass_debug::klass_debug_derive_inner;
 use crate::native_fn::native_fn_inner;
+use crate::parse_variant::derive_parse_variant_inner;
 
 #[proc_macro]
 pub fn generate_ux(_: TokenStream) -> TokenStream {
@@ -67,33 +68,89 @@ pub fn klass_debug_derive(input: TokenStream) -> TokenStream {
 }
 
 /// class parser derive
-/// - enum
+/// - struct field attribute
+///   - `enum_entry`
+///     see `enum attribute` part
+///   - `constant_pool`
+///     - `set`
+///       enum `Constant` need use constant_pool
+///       as index map. use `constant_pool(set)` to
+///       init it in `context`.
+///     - `read`
+///       constant list should preset the index 0
+///       position resolve invalid constant index.
+///       use `constant_pool(read)` to config `Vec`
+///       derive.
+///   - `constant_index`
+///     - `setend`
+///       set constant_pool size in `context` for
+///       `check` function
+///     - `check`
+///       check if is valid constant_pool index
+///       ``` rust
+///       struct InstanceKlass {
+///           #[class_parser(constant_index(setend))]
+///           constant_pool_cnt: u16,
+///           constant_pool: ConstantPool,
+///         
+///       }
+///       struct ConstantClass {
+///           #[class_parser(constant_index(check))]
+///           name_index: u16,
+///       }
+///       ```
+///   - `count`
+///     use `set` and `get` to set list cnt and
+///     read cnt. `get` will impl ClassParser for
+///     `Vec` type.
+///     ``` rust
+///     struct InstanceKlass {
+///         #[class_parser(count(set))]
+///         constant_pool_cnt: u16,
+///         #[class_parser(count(get))]
+///         constant_pool: Vec<Constant>,
+///     }
+///     ```
+///     if it's impled for `Vec<Some>` like `Vec<u16>`
+///     use `impld`
+///     ``` rust
+///     struct Some {
+///         #[class_parser(count(set))]
+///         come_cnt: u8,
+///         #[class_parser(count(impled))]
+///         somes: Vec<u32>,
+///     }
+///     ```
+///   - `skip`
+///     skip recursive class parser stage.
+/// - enum attrbute
 ///   need `#[enum_entry(..)]` for match parse
 ///   generating
 ///   - index in the turple struct
 ///     ``` rust
 ///     #[derive(ClassParser)]
-///     #[enum_entry(index(constant_index_map[u8]))]
+///     #[class_parser(enum_entry(index(map = constant_index_map[u8])))]
 ///     struct enum Constant {
 ///         Class(ConstantClass)
 ///     }
-///
+///     // inner struct
 ///     #[derive(ClassParser)]
 ///     struct ConstantClass {
-///         #[enum_entry(get)]
+///         #[class_parser(enum_entry(get))]
 ///         pub tag: u8
 ///     }
 ///     ```
 ///   - index outside the enum
 ///     ``` rust
+///     // outer struct
 ///     #[derive(ClassParser)]
 ///     struct ElementValue {
-///         #[enum_entry(set)]
+///         #[class_parser(enum_entry(set))]
 ///         tag: u8,
 ///         value: Value,
 ///     }
 ///     #[derive(ClassParser)]
-///     #[enum_entry(index(element_type_index_map[u8], outer))]
+///     #[class_parser(enum_entry(index(map = element_type_index_map[u8], outer)))]
 ///     enum Value {
 ///         ConstValueIndex {
 ///             ...
@@ -102,9 +159,9 @@ pub fn klass_debug_derive(input: TokenStream) -> TokenStream {
 ///     }
 ///     ```
 #[proc_macro_derive(ClassParser, attributes(class_parser))]
-pub fn class_file_parse_derive(input: TokenStream) -> TokenStream {
+pub fn derive_class_parser(input: TokenStream) -> TokenStream {
     let ast = parse_macro_input!(input as Item);
-    unwrap_err!(class_file_parse_derive_inner(&ast))
+    unwrap_err!(derive_class_parser_inner(&ast))
 }
 
 /// - single
@@ -233,4 +290,10 @@ pub fn inject(_: TokenStream, input: TokenStream) -> TokenStream {
 pub fn derive_getter(input: TokenStream) -> TokenStream {
     let ast = parse_macro_input!(input as DeriveInput);
     unwrap_err!(derive_getter_inner(&ast))
+}
+
+#[proc_macro_derive(ParseVariant, attributes(parse_variant))]
+pub fn derive_parse_variant(input: TokenStream) -> TokenStream {
+    let ast = parse_macro_input!(input as ItemEnum);
+    unwrap_err!(derive_parse_variant_inner(&ast))
 }

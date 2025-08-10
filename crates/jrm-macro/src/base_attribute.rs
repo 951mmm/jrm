@@ -1,6 +1,6 @@
-use base_macro::syn_err;
 use convert_case::{Case, Casing};
 use darling::{FromMeta, util::Flag};
+use macro_utils::syn_err;
 use quote::{format_ident, quote};
 use syn::{
     Field, Fields, Ident, ItemStruct, Token, Type, TypePath, parse_quote, punctuated::Punctuated,

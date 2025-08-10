@@ -1,5 +1,5 @@
 use quote::ToTokens;
-use syn::{Type, TypePath};
+use syn::{Attribute, MetaList, Type, TypePath};
 
 /// 不提取泛型，只提取最外层
 /// some::A<B> -> B
@@ -18,6 +18,21 @@ pub fn try_extract_outer_ty_string(ty: &Type) -> syn::Result<String> {
         }
         _ => err,
     }
+}
+pub fn try_extract_attr_meta_list<'a>(
+    attrs: &'a [Attribute],
+    attr_str: &'a str,
+    meta_list_str: &'a str,
+) -> syn::Result<Option<MetaList>> {
+    for attr in attrs {
+        if attr.path().is_ident(attr_str) {
+            let meta_list: MetaList = attr.parse_args()?;
+            if meta_list.path.is_ident(meta_list_str) {
+                return Ok(Some(meta_list));
+            }
+        }
+    }
+    Ok(None)
 }
 
 #[cfg(test)]

@@ -87,6 +87,7 @@ dependencies = [
  "macro-utils",
  "proc-macro2",
  "quote",
+ "rstest",
  "syn",
 ]
 
@@ -575,6 +576,7 @@ dependencies = [
  "macro-utils",
  "proc-macro2",
  "quote",
+ "rstest",
  "syn",
 ]
 
@@ -591,8 +593,10 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "bitflags",
+ "dotenvy",
  "jrm-macro",
  "maplit",
+ "rstest",
 ]
 
 [[package]]

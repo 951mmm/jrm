@@ -35,6 +35,8 @@ pub struct ParserContext {
     pub constant_index_range: Range<u16>,
     pub constant_pool: Arc<ConstantPool>,
     pub constant_tag_map: HashMap<u8, &'static str>,
+    pub element_value_map: HashMap<u8, &'static str>,
+
     pub enum_entry: Box<dyn Any>,
 }
 
@@ -68,12 +70,14 @@ impl ParserContext {
             19 => "Module",
             20 => "Package",
         };
+        let element_value_map = hashmap! {};
         Self {
             class_reader,
             count: Default::default(),
             constant_index_range: Default::default(),
             constant_pool: Default::default(),
             constant_tag_map,
+            element_value_map,
             enum_entry: Box::new(i32::default()),
         }
     }

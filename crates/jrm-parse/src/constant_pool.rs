@@ -57,29 +57,6 @@ impl From<Vec<Constant>> for ConstantPool {
         Self { constants: value }
     }
 }
-// #[derive(Clone, Debug, ClassParser)]
-// #[enum_entry(get(u8))]
-// #[repr(u8)]
-// pub enum Constant {
-//     Utf8(ConstantUtf8) = 1,
-//     Integer(i32) = 3,
-//     Float(f32),
-//     Long(i64),
-//     Double(f64),
-//     Class(ConstantClass),
-//     String(u16),
-//     FieldRef(u16, u16),
-//     MethodRef(u16, u16),
-//     InterfaceMethodRef(u16, u16),
-//     NameAndType(u16, u16),
-//     MethodHandle(u8, u16) = 15,
-//     MethodType(u16),
-//     Dynamic(u16, u16),
-//     InvokeDynamic(u16, u16),
-//     Module(u16),
-//     Package(u16),
-//     Invalid = 0,
-// }
 constant_enum! {
     Utf8,
     Integer,
@@ -115,7 +92,7 @@ define_constants! {
         #[class_parser(count(set))]
         length: u16,
         #[class_parser(count(impled))]
-        bytes: Vec<u8>,
+         bytes: Vec<u8>,
     }
     #[constant(one_word)]
     pub struct ConstantInteger {}
@@ -257,9 +234,5 @@ mod tests {
         let constant_pool = test_constant_pool();
         let utf8_string = constant_pool.get_utf8_string(1);
         assert_eq!(utf8_string, "aaaa");
-    }
-    #[test]
-    fn test_constant_class_getter() {
-        let constant_class = ConstantClass::new(1);
     }
 }

@@ -1,12 +1,19 @@
+mod enum_entry;
+
 use quote::{format_ident, quote};
 use syn::{
-    Attribute, Fields, FieldsNamed, FieldsUnnamed, GenericArgument, Ident, Item, ItemEnum,
-    ItemStruct, MetaList, PathArguments, Type, TypePath, bracketed, parenthesized,
+    Fields, FieldsNamed, FieldsUnnamed, GenericArgument, Ident, Item, ItemEnum, ItemStruct,
+    PathArguments, Type, TypePath,
 };
 
-use base_macro::{attr_enum, simple_field_attr, syn_err};
+use base_macro::{attr_enum, simple_field_attr};
+use macro_utils::{FromAttrs, syn_err};
 
-pub fn class_file_parse_derive_inner(ast: &Item) -> syn::Result<proc_macro2::TokenStream> {
+use enum_entry::EnumEntry;
+
+use crate::class_parser::enum_entry::IndexMeta;
+
+pub fn derive_class_parser_inner(ast: &Item) -> syn::Result<proc_macro2::TokenStream> {
     let result = match &ast {
         Item::Struct(item_struct) => resolve_struct(item_struct)?,
         Item::Enum(item_enum) => resolve_enum(item_enum)?,
@@ -19,8 +26,8 @@ pub fn class_file_parse_derive_inner(ast: &Item) -> syn::Result<proc_macro2::Tok
 fn resolve_struct(item_struct: &ItemStruct) -> syn::Result<proc_macro2::TokenStream> {
     let ItemStruct { fields, ident, .. } = item_struct;
     let result = match fields {
-        Fields::Named(fields_named) => resolve_named(fields_named, ident)?,
-        Fields::Unnamed(fields_unnamed) => resolve_unnamed(fields_unnamed, ident)?,
+        Fields::Named(fields_named) => resolve_struct_fields_named(fields_named, ident)?,
+        Fields::Unnamed(fields_unnamed) => resolve_struct_fields_unnamed(fields_unnamed, ident)?,
         _ => unreachable!(),
     };
     Ok(result)
@@ -33,12 +40,13 @@ fn resolve_enum(item_enum: &ItemEnum) -> syn::Result<proc_macro2::TokenStream> {
         attrs,
         ..
     } = item_enum;
-    let attr_enum_entry = attr_enum_entry(attrs)?;
-    if let EnumEntry::Index {
-        index_ty,
-        map_ident,
-    } = &attr_enum_entry
-    {
+    let attr_enum_entry = EnumEntry::from_attrs(attrs)?;
+    if let EnumEntry::Index(index_mata) = &attr_enum_entry {
+        let IndexMeta {
+            index_ty,
+            map_ident,
+            outer,
+        } = index_mata.as_ref();
         let mut arm_expr = vec![];
         for variant in variants {
             let variant_ident = &variant.ident;
@@ -48,6 +56,15 @@ fn resolve_enum(item_enum: &ItemEnum) -> syn::Result<proc_macro2::TokenStream> {
             arm_expr.push(expr);
         }
 
+        let index_stmts = if *outer {
+            generate_entry_get_stmt(index_ty, &Some(format_ident!("index")))
+        } else {
+            quote! {
+                let index = <#index_ty as ClassParser>::parse(ctx)?;
+                ctx.enum_entry = Box::new(index);
+            }
+        };
+
         let debug_token_stream = if cfg!(feature = "debug") {
             quote! {println!("enum is: {}, index is: {}",stringify!(#ident), index);}
         } else {
@@ -56,9 +73,8 @@ fn resolve_enum(item_enum: &ItemEnum) -> syn::Result<proc_macro2::TokenStream> {
         return Ok(quote! {
             impl ClassParser for #ident {
                 fn parse(ctx: &mut ParserContext) -> anyhow::Result<Self> {
-                    let index = <#index_ty as ClassParser>::parse(ctx)?;
+                    #index_stmts
                     #debug_token_stream
-                    ctx.enum_entry = Box::new(index);
                     let choice: String = ContextIndex::get(&ctx.#map_ident, index);
                     let result = match choice.as_str() {
                         #(#arm_expr,)*
@@ -81,46 +97,77 @@ fn get_match_arms(
     lit: &str,
 ) -> syn::Result<proc_macro2::TokenStream> {
     let constructor = quote! {#enum_ident::#variant_ident};
-    let mut temp_idents = vec![];
-    let mut parse_stmts = vec![];
 
     match fields {
+        Fields::Named(fields_named) => resolve_enum_fields_named(fields_named, lit, &constructor),
         Fields::Unnamed(fields_unnamed) => {
-            for (index, field) in (&fields_unnamed.unnamed).into_iter().enumerate() {
-                let field_ty = &field.ty;
-                let temp_ident = format_ident!("temp_{}", index);
-
-                let debug_token_stream = if cfg!(feature = "debug") {
-                    quote! {println!("val is: {:?}", #temp_ident);}
-                } else {
-                    quote! {}
-                };
-                let stmt = quote! {
-                    let #temp_ident = <#field_ty as ClassParser>::parse(ctx)?;
-                    #debug_token_stream
-                };
-                temp_idents.push(temp_ident);
-                parse_stmts.push(stmt);
-            }
-            Ok(quote! {
-                #lit => {
-                    #(#parse_stmts)*
-                    #constructor(#(#temp_idents),*)
-                }
-            })
+            resolve_enum_fields_unnamed(fields_unnamed, lit, &constructor)
         }
+
         Fields::Unit => Ok(quote! {
             #lit => #constructor
         }),
-        _ => {
-            syn_err!(
-                enum_ident,
-                "invalid field type, surpport `unamed` or `unit`"
-            );
-        }
     }
 }
-fn resolve_named(
+
+fn resolve_enum_fields_named(
+    fields_named: &FieldsNamed,
+    lit: &str,
+    constructor: &proc_macro2::TokenStream,
+) -> syn::Result<proc_macro2::TokenStream> {
+    let mut parse_stmts = vec![];
+    let mut field_idents = vec![];
+    for field in &fields_named.named {
+        let field_ident = &field.ident;
+        let field_ty = &field.ty;
+        parse_stmts.push(quote! {
+            let #field_ident = <#field_ty as ClassParser>::parse(ctx)?;
+
+        });
+        field_idents.push(field_ident);
+    }
+    Ok(quote! {
+        #lit => {
+            #(#parse_stmts)*
+            #constructor {
+                #(#field_idents),*
+            }
+        }
+    })
+}
+
+fn resolve_enum_fields_unnamed(
+    fields_unnamed: &FieldsUnnamed,
+    lit: &str,
+    constructor: &proc_macro2::TokenStream,
+) -> syn::Result<proc_macro2::TokenStream> {
+    let mut temp_idents = vec![];
+    let mut parse_stmts = vec![];
+    for (index, field) in (&fields_unnamed.unnamed).into_iter().enumerate() {
+        let field_ty = &field.ty;
+        let temp_ident = format_ident!("temp_{}", index);
+
+        let debug_token_stream = if cfg!(feature = "debug") {
+            quote! {println!("val is: {:?}", #temp_ident);}
+        } else {
+            quote! {}
+        };
+        let stmt = quote! {
+            let #temp_ident = <#field_ty as ClassParser>::parse(ctx)?;
+            #debug_token_stream
+        };
+        temp_idents.push(temp_ident);
+        parse_stmts.push(stmt);
+    }
+    Ok(quote! {
+        #lit => {
+            #(#parse_stmts)*
+            #constructor(#(#temp_idents),*)
+        }
+    })
+}
+
+fn resolve_struct_fields_named(
     fields_named: &FieldsNamed,
     struct_ident: &Ident,
 ) -> syn::Result<proc_macro2::TokenStream> {
@@ -132,24 +179,39 @@ fn resolve_named(
         let field_ident = &field.ident;
         let field_ty = &field.ty;
 
-        let count = attr_count(field)?;
-        let constant_index = attr_constant_index(field)?;
-        let enum_entry = attr_enum_entry(&field.attrs)?;
+        let field_attrs = &field.attrs;
+        let count = Count::from_attrs(field_attrs)?;
+        let constant_index = ConstantIndex::from_attrs(field_attrs)?;
+        let enum_entry = EnumEntry::from_attrs(field_attrs)?;
         // NOTE set和read或许不会同时出现。需要包装
-        let is_set_constant_pool = attr_constant_pool(field)?.eq(&ConstantPool::Set);
-        let is_constant_pool_read_mode = attr_constant_pool(field)?.eq(&ConstantPool::Read);
-        let is_skip = attr_skip(field);
+        let is_set_constant_pool =
+            matches!(ConstantPool::from_attrs(field_attrs)?, ConstantPool::Set);
+        let is_constant_pool_read_mode =
+            matches!(ConstantPool::from_attrs(field_attrs)?, ConstantPool::Read);
+        let is_skip = skip_from_attrs(field_attrs);
 
         match is_skip {
             false => {
-                let mut stmt = quote! {
+                let stmt = quote! {
                     let #field_ident = <#field_ty as ClassParser>::parse(ctx)?;
                 };
-                if let EnumEntry::Get = enum_entry {
-                    stmt = quote! {
-                        let #field_ident = ctx.enum_entry.downcast_ref::<#field_ty>().unwrap().clone();
-                    };
-                }
+                let stmt = match enum_entry {
+                    EnumEntry::Get => generate_entry_get_stmt(field_ty, field_ident),
+                    EnumEntry::Set => {
+                        quote! {
+                            #stmt
+                            ctx.enum_entry = Box::new(#field_ident);
+                        }
+                    }
+                    EnumEntry::Index(_) => {
+                        syn_err!(
+                            field,
+                            "invalid enum entry `index`, expected `get` and `set` for struct field"
+                        );
+                    }
+                    EnumEntry::None => stmt,
+                };
+
                 parse_stmts.push(stmt);
 
                 match count {
@@ -211,7 +273,7 @@ fn resolve_named(
     })
 }
 
-fn resolve_unnamed(
+fn resolve_struct_fields_unnamed(
     fields_unnamed: &FieldsUnnamed,
     struct_ident: &Ident,
 ) -> syn::Result<proc_macro2::TokenStream> {
@@ -222,9 +284,11 @@ fn resolve_unnamed(
     for (index, field) in (&fields_unnamed.unnamed).into_iter().enumerate() {
         let field_ty = &field.ty;
         let temp_ident = format_ident!("temp_{}", index);
+        let field_attrs = &field.attrs;
 
-        let is_get_count = attr_count(field)?.eq(&Count::Get);
-        let is_constant_pool_read_mode = attr_constant_pool(field)?.eq(&ConstantPool::Read);
+        let is_get_count = matches!(Count::from_attrs(field_attrs)?, Count::Get);
+        let is_constant_pool_read_mode =
+            matches!(ConstantPool::from_attrs(field_attrs)?, ConstantPool::Read);
         let stmt = quote! {
             let #temp_ident = <#field_ty as ClassParser>::parse(ctx)?;
         };
@@ -269,68 +333,8 @@ enum Count {
     Impled,
 }
 // #[attr_enum]
-enum EnumEntry {
-    Get,
-    Index { index_ty: Type, map_ident: Ident },
-    None,
-}
 
-fn attr_enum_entry(attrs: &[Attribute]) -> syn::Result<EnumEntry> {
-    let mut enum_entry = EnumEntry::None;
-    let meta_list = extract_attr_meta_list(attrs, "enum_entry")?;
-    if meta_list.is_none() {
-        return Ok(enum_entry);
-    }
-    meta_list.unwrap().parse_nested_meta(|meta| {
-        // #[enum_entry(get)]
-        if meta.path.is_ident("get") {
-            enum_entry = EnumEntry::Get;
-            return Ok(());
-        }
-        // #[enum_entry(index(map[ty]))]
-        if meta.path.is_ident("index") {
-            let content;
-            parenthesized!(content in meta.input);
-            let ident: Ident = content.parse()?;
-            let content_in_square;
-            bracketed!(content_in_square in content);
-            let ty: Type = content_in_square.parse()?;
-            enum_entry = EnumEntry::Index {
-                index_ty: ty,
-                map_ident: ident,
-            };
-            return Ok(());
-        }
-        Err(meta.error("unrecongnized enum_entry"))
-    })?;
-    // if attr.path().is_ident("enum_entry") {
-    //     attr.parse_nested_meta(|meta| {
-    //         // #[enum_entry(get)]
-    //         if meta.path.is_ident("get") {
-    //             enum_entry = EnumEntry::Get;
-    //             return Ok(());
-    //         }
-    //         // #[enum_entry(index(map[ty]))]
-    //         if meta.path.is_ident("index") {
-    //             let content;
-    //             parenthesized!(content in meta.input);
-    //             let ident: Ident = content.parse()?;
-    //             let content_in_square;
-    //             bracketed!(content_in_square in content);
-    //             let ty: Type = content_in_square.parse()?;
-    //             enum_entry = EnumEntry::Index {
-    //                 index_ty: ty,
-    //                 map_ident: ident,
-    //             };
-    //             return Ok(());
-    //         }
-    //         Err(meta.error("unrecongnized enum_entry"))
-    //     })?;
-    // }
-    Ok(enum_entry)
-}
-
-simple_field_attr! {"skip"}
+simple_field_attr! {class_parser(skip)}
 
 fn resolve_collection_impl(
     collection_ty: &Type,
@@ -375,7 +379,7 @@ fn get_collection_ident(ty: &Type) -> syn::Result<&Ident> {
             return Ok(&segment.ident);
         }
     }
-    syn_err! {ty, "failed to get collection ty"};
+    syn_err!(ty, "failed to get collection ty");
 }
 fn get_inner_ty(ty: &Type) -> syn::Result<&Type> {
     if let Type::Path(TypePath { path, .. }) = ty {
@@ -389,22 +393,16 @@ fn get_inner_ty(ty: &Type) -> syn::Result<&Type> {
             }
         }
     }
-    syn_err! {ty, "invalid inner type for Vec"};
+    syn_err!(ty, "invalid inner type for Vec");
 }
 
-fn extract_attr_meta_list<'a>(
-    attrs: &'a [Attribute],
-    meta_list_str: &'a str,
-) -> syn::Result<Option<MetaList>> {
-    for attr in attrs {
-        if attr.path().is_ident("class_parser") {
-            let meta_list: MetaList = attr.parse_args()?;
-            if meta_list.path.is_ident(meta_list_str) {
-                return Ok(Some(meta_list));
-            }
-        }
+fn generate_entry_get_stmt(ty: &Type, index_ident: &Option<Ident>) -> proc_macro2::TokenStream {
+    quote! {
+        let #index_ident = ctx.enum_entry
+            .downcast_ref::<#ty>()
+            .ok_or(anyhow::anyhow!("failed to get entry index with type: {}", stringify!(#ty)))?
+            .clone();
     }
-    Ok(None)
 }
 
 #[cfg(test)]
@@ -412,12 +410,12 @@ mod tests {
     use std::error::Error;
 
     use macro_utils::print_expanded_fmt;
-    use quote::ToTokens;
-    use syn::{Ident, Item, ItemEnum, Type, Variant, parse_quote};
+
+    use syn::{Ident, Item, ItemEnum, Variant, parse_quote};
 
     use crate::{
-        class_file_parse_derive_inner,
-        class_parser::{EnumEntry, attr_enum_entry, get_match_arms, resolve_enum},
+        class_parser::{get_match_arms, resolve_enum},
+        derive_class_parser_inner,
     };
 
     #[test]
@@ -431,48 +429,11 @@ mod tests {
                 b: ConstantPool,
             }
         );
-        let expanded = class_file_parse_derive_inner(&code)?;
+        let expanded = derive_class_parser_inner(&code)?;
         let raw_code = expanded.to_string();
         assert!(raw_code.contains("ctx . constant_pool ="));
         print_expanded_fmt(expanded);
         Ok(())
-    }
-
-    #[test]
-    fn test_attr_enum_entry() -> Result<(), Box<dyn Error>> {
-        let attrs = vec![
-            parse_quote!(#[class_parser(enum_entry(get))]),
-            parse_quote!(#[class_parser(enum_entry(index(map[u8])))]),
-        ];
-
-        let mut results = attrs.iter().cloned().map(|attr| {
-            let attrs = vec![attr];
-            attr_enum_entry(&attrs).unwrap()
-        });
-
-        assert!(matches!(results.next().unwrap(), EnumEntry::Get));
-        assert!(test_attr_enum_entry_1(&results.next().unwrap()));
-
-        Ok(())
-    }
-    fn test_attr_enum_entry_1(result: &EnumEntry) -> bool {
-        let u8_ty: Type = parse_quote!(u8);
-        if let EnumEntry::Index {
-            index_ty,
-            map_ident,
-        } = result
-        {
-            if ty_eq(index_ty, &u8_ty) && map_ident == "map" {
-                return true;
-            }
-        }
-        false
-    }
-
-    fn ty_eq(tyl: &Type, tyr: &Type) -> bool {
-        tyl.to_token_stream()
-            .to_string()
-            .eq(&tyr.to_token_stream().to_string())
     }
 
     #[test]
@@ -493,13 +454,12 @@ mod tests {
         Ok(())
     }
     #[test]
-    fn test_get_match_arms_named_expand() {
+    fn test_get_match_arms_named_expand() -> Result<(), Box<dyn Error>> {
         let varaint: Variant = parse_quote!(A { b: B });
-        let err = generate_match_arms(&varaint).unwrap_err();
-        assert_eq!(
-            err.to_string(),
-            "invalid field type, surpport `unamed` or `unit`"
-        );
+        let raw_code = generate_match_arms(&varaint)?;
+        assert!(raw_code.contains("TestEnum :: A { b }"));
+        println!("{}", raw_code);
+        Ok(())
     }
     fn generate_match_arms(variant: &Variant) -> syn::Result<String> {
         let ident: Ident = parse_quote!(TestEnum);

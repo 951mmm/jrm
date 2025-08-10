@@ -1,5 +1,5 @@
 use convert_case::{Case, Casing};
-use quote::{format_ident, quote};
+use quote::quote;
 use syn::{Data, DeriveInput, Ident, parse::Parse, parse_quote};
 
 pub struct Attrs {
@@ -54,36 +54,35 @@ pub fn attr_enum_inner(attrs: &Attrs, ast: &mut DeriveInput) -> proc_macro2::Tok
         if !if_items.is_empty() {
             if_items.push(quote! {
                 else {
-                    return Err(syn::Error::new_spanned(
-                        attr,
-                        format_args!("failed to parse attr `{}`", #enum_ident_string),
-                    ));
+                    syn_err!("failed to parse attr `{}`", #enum_ident_string);
                 };
             });
         }
 
         data_enum.variants.push(parse_quote!(None));
     }
-    ast.attrs
-        .push(parse_quote!(#[derive(Debug, Eq, PartialEq)]));
+    ast.attrs.push(parse_quote!(#[derive(Debug)]));
 
     let Attrs { wrapper_ident } = attrs;
 
-    let fn_ident = format_ident!("attr_{}", enum_ident_string);
     quote! {
         #ast
-        fn #fn_ident(field: &syn::Field) -> syn::Result<#enum_ident> {
-            for attr in &field.attrs {
-                if attr.path().is_ident(stringify!(#wrapper_ident)) {
-                    let meta_list: syn::MetaList = attr.parse_args()?;
-                    if meta_list.path.is_ident(#enum_ident_string) {
-                        let op: Ident = meta_list.parse_args()?;
-                        #(#if_items)*
-                        return Ok(result);
+        impl FromAttrs for #enum_ident {
+            fn from_attrs(attrs: &[syn::Attribute]) -> syn::Result<Self>
+                where Self: Sized
+            {
+                for attr in attrs {
+                    if attr.path().is_ident(stringify!(#wrapper_ident)) {
+                        let meta_list: syn::MetaList = attr.parse_args()?;
+                        if meta_list.path.is_ident(#enum_ident_string) {
+                            let op: Ident = meta_list.parse_args()?;
+                            #(#if_items)*
+                            return Ok(result);
+                        }
                     }
                 }
+                Ok(#enum_ident::None)
             }
-            Ok(#enum_ident::None)
         }
     }
 }
