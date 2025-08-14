@@ -3,8 +3,11 @@ mod code;
 
 use crate::ConstantClass;
 use crate::class_file_parser::{ClassParser, ContextIndex, ParserContext};
-use jrm_macro::{ClassParser, Getter, attribute_enum, base_attribute, impl_class_parser_for_vec};
+use jrm_macro::{
+    ClassParser, Getter, ParseVariant, attribute_enum, base_attribute, impl_class_parser_for_vec,
+};
 
+use annotation::*;
 pub use code::Exception;
 use code::*;
 
@@ -16,9 +19,10 @@ attribute_enum! {
     Code, LineNumberTable, LocalVariableTable, // LocalVariableTypeTable
 
     Exception,
-    Deprecated
+    Deprecated,
 
     // annotation
+    RuntimeVisibleAnnotations
 
 }
 impl_class_parser_for_vec! {Attribute}

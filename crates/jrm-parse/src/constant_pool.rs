@@ -2,7 +2,7 @@ use std::{fmt::Debug, hint::unreachable_unchecked};
 
 use crate::class_file_parser::{ClassParser, ContextIndex, ParserContext};
 use anyhow::bail;
-use jrm_macro::{ClassParser, Getter, constant, constant_enum, define_constants};
+use jrm_macro::{ClassParser, Getter, ParseVariant, constant, constant_enum, define_constants};
 
 #[derive(ClassParser, Default)]
 pub struct ConstantPool {
@@ -88,36 +88,57 @@ impl TryFrom<&Constant> for String {
 }
 
 define_constants! {
+    #[derive(Clone,  ClassParser, Getter)]
     pub struct ConstantUtf8 {
         #[class_parser(count(set))]
         length: u16,
         #[class_parser(count(impled))]
          bytes: Vec<u8>,
     }
-    #[constant(one_word)]
+
+    #[constant(feature = one_word)]
+    #[derive(Clone, Debug, ClassParser, Getter)]
     pub struct ConstantInteger {}
-    #[constant(one_word)]
+
+    #[constant(feature = one_word)]
+    #[derive(Clone, Debug, ClassParser, Getter)]
     pub struct ConstantFloat {}
-    #[constant(two_words)]
+
+    #[constant(feature = two_words)]
+    #[derive(Clone, Debug, ClassParser, Getter)]
     pub struct ConstantLong {}
-    #[constant(two_words)]
+
+    #[constant(feature = two_words)]
+    #[derive(Clone, Debug, ClassParser, Getter)]
     pub struct ConstantDouble {}
+
+    #[derive(Clone, Debug, ClassParser, Getter)]
     pub struct ConstantClass {
         #[class_parser(constant_index(check))]
         #[getter(copy)]
         name_index: u16,
     }
+
+    #[derive(Clone, Debug, ClassParser, Getter)]
     pub struct ConstantString {
         #[class_parser(constant_index(check))]
         #[getter(copy)]
         string_index: u16,
     }
-    #[constant(__ref)]
+
+    #[constant(feature = __ref)]
+    #[derive(Clone, Debug, ClassParser, Getter)]
     pub struct ConstantFieldRef {}
-    #[constant(__ref)]
+
+    #[constant(feature = __ref)]
+    #[derive(Clone, Debug, ClassParser, Getter)]
     pub struct ConstantMethodRef {}
-    #[constant(__ref)]
+
+    #[constant(feature = __ref)]
+    #[derive(Clone, Debug, ClassParser, Getter)]
     pub struct ConstantInterfaceMethodRef {}
+
+    #[derive(Clone, Debug, ClassParser, Getter)]
     pub struct ConstantNameAndType {
         #[class_parser(constant_index(check))]
         #[getter(copy)]
@@ -127,26 +148,37 @@ define_constants! {
         #[getter(copy)]
         descriptor_index: u16,
     }
+
+    #[derive(Clone, Debug, ClassParser, Getter)]
     pub struct ConstantMethodHandle {
         #[getter(copy)]
         reference_kind: u8,
 
-        #[class_parser(constant_index(check))]
+        #[class_parser(jonstant_index(check))]
         #[getter(copy)]
         reference_index: u16,
     }
+
+    #[derive(Clone, Debug, ClassParser, Getter)]
     pub struct ConstantMethodType {
         #[class_parser(constant_index(check))]
         #[getter(copy)]
         descriptor_index: u16,
     }
-    #[constant(dynamic)]
+
+    #[constant(feature = dynamic)]
+    #[derive(Clone, Debug, ClassParser, Getter)]
     pub struct ConstantDynamic {}
-    #[constant(dynamic)]
+    #[constant(feature = dynamic)]
+    #[derive(Clone, Debug, ClassParser, Getter)]
     pub struct ConstantInvokeDynamic {}
-    #[constant(module)]
+
+    #[constant(feature = module)]
+    #[derive(Clone, Debug, ClassParser, Getter)]
     pub struct ConstantModule {}
-    #[constant(module)]
+
+    #[constant(feature = module)]
+    #[derive(Clone, Debug, ClassParser, Getter)]
     pub struct ConstantPackage {}
 }
 
@@ -185,12 +217,12 @@ impl ConstantString {
     }
 }
 
-// impl Debug for ConstantUtf8 {
-//     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-//         let utf8_string = String::from_utf8_lossy(&self.bytes);
-//         write!(f, "{}", utf8_string)
-//     }
-// }
+impl Debug for ConstantUtf8 {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let utf8_string = String::from_utf8_lossy(&self.bytes);
+        write!(f, "{}", utf8_string)
+    }
+}
 
 impl From<ConstantUtf8> for String {
     fn from(value: ConstantUtf8) -> Self {

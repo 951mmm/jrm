@@ -1,4 +1,4 @@
-use jrm_macro::{ClassParser, Getter, base_attribute};
+use jrm_macro::{ClassParser, Getter, ParseVariant, base_attribute};
 
 use crate::class_file_parser::{ClassParser, ContextIndex, ParserContext};
 
@@ -6,12 +6,16 @@ use crate::class_file_parser::{ClassParser, ContextIndex, ParserContext};
 #[derive(Debug, ClassParser, Getter)]
 pub struct RuntimeVisibleAnnotationsAttribute {}
 
-#[derive(Debug, ClassParser)]
+#[derive(Debug, ClassParser, Getter)]
 pub struct Annotation {
     #[class_parser(constant_index(check))]
+    #[getter(copy)]
     type_index: u16,
+
     #[class_parser(count(set))]
+    #[getter(skip)]
     num_element_value_pairs: u16,
+
     #[class_parser(count(get))]
     element_value_pairs: Vec<ElementValuePair>,
 }
@@ -30,9 +34,40 @@ pub struct ElementValue {
     value: Value,
 }
 
-#[derive(Debug, ClassParser)]
+#[derive(Debug, ClassParser, ParseVariant)]
 #[class_parser(enum_entry(index(map = element_value_map[u8], outer)))]
 pub enum Value {
     ConstValueIndex(#[class_parser(constant_index(check))] u16),
-    EnumConstValue {},
+    #[parse_variant(pass {
+        #[derive(Debug, Getter)]
+    })]
+    EnumConstValue {
+        #[class_parser(constant_index(check))]
+        #[parse_variant(pass {
+            #[getter(copy)]
+        })]
+        type_name_index: u16,
+        #[class_parser(constant_index(check))]
+        #[parse_variant(pass {
+            #[getter(copy)]
+        })]
+        const_name_index: u16,
+    },
+    ClassInfoIndex(u16),
+    AnnotationValue(Annotation),
+    #[parse_variant(pass {
+        #[derive(Debug, Getter)]
+    })]
+    ArrayValue {
+        #[class_parser(count(set))]
+        #[parse_variant(pass {
+            #[getter(copy)]
+        })]
+        name_values: u16,
+        #[class_parser(count(get))]
+        #[parse_variant(pass {
+            #[getter(copy)]
+        })]
+        values: Vec<ElementValue>,
+    },
 }

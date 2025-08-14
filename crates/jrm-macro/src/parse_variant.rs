@@ -36,14 +36,7 @@ pub fn derive_parse_variant_inner(item_enum: &ItemEnum) -> syn::Result<proc_macr
 
                     let Pass {
                         pass_attrs: field_pass_attrs,
-                        mixed,
                     } = Pass::from_attrs(&struct_field.attrs)?;
-                    if mixed {
-                        syn_err!(
-                            fields,
-                            "invalid named field variant. expectd `#[parse_variant(pass `#[attrs]`)]`"
-                        );
-                    }
                     struct_field.attrs = parse_quote!(#field_pass_attrs);
                 }
                 fields_named_variant_structs.push(quote! {
@@ -53,12 +46,15 @@ pub fn derive_parse_variant_inner(item_enum: &ItemEnum) -> syn::Result<proc_macr
                     }
                 });
                 quote! {
-                    fn #fn_ident(&self) -> anyhow::Result<#variant_ident> {
-                    if let #enum_ident::#variant_ident { #(#field_idents),* } = self {
-                        return Ok(#variant_ident {
-                            #(#field_idents),*
-                        })
-                    }
+                    #[inline]
+                    #[allow(unused)]
+                    pub fn #fn_ident(&self) -> anyhow::Result<#variant_ident> {
+                        if let #enum_ident::#variant_ident { #(#field_idents),* } = self {
+                            return Ok(#variant_ident {
+                                #(#field_idents),*
+                            });
+                        }
+                        anyhow::bail!("failed to parse from {} to {}", stringify!(#enum_ident), stringify!(#variant_ident))
                     }
                 }
             }
@@ -71,13 +67,19 @@ pub fn derive_parse_variant_inner(item_enum: &ItemEnum) -> syn::Result<proc_macr
                 let field = fields.first().unwrap();
                 let field_ty = &field.ty;
                 let temp_ident = format_ident!("temp");
-                quote! {}
+                quote! {
+                    #[inline]
+                    #[allow(unused)]
+                    pub fn #fn_ident(&self) -> anyhow::Result<&#field_ty> {
+                        if let #enum_ident::#variant_ident(#temp_ident) = self {
+                            return Ok(#temp_ident);
+                        }
+                        anyhow::bail!("failed to parse from {} to {}", stringify!(#enum_ident), stringify!(#field_ty))
+                    }
+                }
             }
             Fields::Unit => {
-                syn_err!(
-                    item_enum,
-                    "invalid variant, expected `named` and `unnamed` fields"
-                );
+                continue;
             }
         };
         parse_fns.push(parse_fn);
@@ -92,7 +94,6 @@ pub fn derive_parse_variant_inner(item_enum: &ItemEnum) -> syn::Result<proc_macr
 
 struct Pass {
     pass_attrs: proc_macro2::TokenStream,
-    mixed: bool,
 }
 impl FromAttrs for Pass {
     fn from_attrs(attrs: &[syn::Attribute]) -> syn::Result<Self>
@@ -100,7 +101,6 @@ impl FromAttrs for Pass {
         Self: Sized,
     {
         let mut pass_attrs = quote! {};
-        let mut mixed = false;
         for attr in attrs {
             if attr.path().is_ident("parse_variant") {
                 attr.parse_nested_meta(|meta| {
@@ -116,11 +116,9 @@ impl FromAttrs for Pass {
                         )
                     }
                 })?;
-            } else {
-                mixed = true;
-            }
+            } 
         }
-        Ok(Pass { pass_attrs, mixed })
+        Ok(Pass { pass_attrs,  })
     }
 }
 
@@ -139,7 +137,8 @@ mod test {
             #[parse_variant(pass {#[some_macro(any_attrs)]})]
             b: B
         }
-    }), &["fn parse_a (& self)",
+    }), &[
+            "fn parse_a (& self)",
             "struct A < 'a >",
             "# [derive (Debug)] pub s",
             "# [some_macro (any_attrs)] b",
@@ -147,7 +146,8 @@ mod test {
         "named field")]
     #[case(parse_quote!(enum Some {
         A(B)
-    }), &[], "unnamed field")]
+    }), &["return Ok (temp) ;"],
+        "unnamed field")]
     fn test_parse_variant_expand(
         #[case] input: ItemEnum,
         #[case] contains: &[&str],
@@ -159,20 +159,10 @@ mod test {
             contains
                 .iter()
                 .all(|item| output.to_string().contains(item)),
-            "bad case: {}",
-            desc
+            "{desc}",
         );
     }
     #[rstest]
-    #[case(parse_quote!(
-        enum Some {
-            A {
-                #[some_macro(any_attrs)]
-                b: B
-            }
-        }), 
-        "invalid named field variant. expectd `#[parse_variant(pass `#[attrs]`)]`",
-        "named field variant should pass attrs")]
     #[case(parse_quote!(
         enum Some {
             #[parse_variant(other)]
@@ -190,6 +180,6 @@ mod test {
         #[case] desc: &str,
     ) {
         let output = derive_parse_variant_inner(&input);
-        assert!(output.unwrap_err().to_string().contains(err_str), "bad case: {}", desc);
+        assert!(output.unwrap_err().to_string().contains(err_str), "{desc}");
     }
 }

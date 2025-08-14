@@ -81,7 +81,7 @@ mod helper {
         class::{Class, ClassBuilder},
         heap::ObjectRef,
         helper::TryGetConstant,
-        method::{CatchType, Exception, Method, MethodBuilder, MethodSignature},
+        method::{CatchType, Exception, Method, MethodBuilder, MethodId, MethodSignature},
     };
 
     pub fn build_class(class_name: &str, instance_class: InstanceKlass) -> Result<Class> {
@@ -123,9 +123,12 @@ mod helper {
         class_name: &str,
         raw_methods: &[RawMethod],
         constant_pool: &Arc<ConstantPool>,
-    ) -> Result<HashMap<String, Method>> {
+    ) -> Result<HashMap<MethodId, Method>> {
         let mut methods = HashMap::new();
         for raw_method in raw_methods {
+            let access_flags = raw_method.get_access_flags();
+            let is_native = access_flags.contains(MethodAccessFlags::NATIVE);
+
             let name_index = raw_method.get_name_index();
             let name = constant_pool.get_utf8_string(name_index);
 
@@ -133,8 +136,15 @@ mod helper {
             // TODO 细化error
             let descriptor = constant_pool.get_utf8_string(descriptor_index);
             let signature = MethodSignature::try_from(descriptor)?;
-            let access_flags = raw_method.get_access_flags();
-            let is_native = access_flags.contains(MethodAccessFlags::NATIVE);
+
+            let mut method_id = match name.as_str() {
+                "<init>" => MethodId::Init(signature.clone()),
+                _ => MethodId::Common {
+                    name: name.clone(),
+                    signature: signature.clone(),
+                },
+            };
+
             let attributes = raw_method.get_attributes();
 
             let mut max_locals = None;
@@ -173,12 +183,23 @@ mod helper {
                         exception_indices.push(class_name);
                     }
                 }
+                if let Ok(runtime_vis_ann_attr) = attribute.parse_runtime_visible_annotations() {
+                    let is_handled = runtime_vis_ann_attr.get_annotations().iter().any(|ann| {
+                        let type_index = ann.get_type_index();
+                        let type_string = constant_pool.get_utf8_string(type_index);
+                        type_string == "Ljava/lang/invoke/MethodHandle$PolymorphicSignature;"
+                    });
+                    if is_handled && is_native {
+                        method_id = MethodId::Polymorphic(signature.clone());
+                    }
+                }
             }
             // TODO reflection method
             let reflection_ref = ObjectRef::null();
 
             let class_name = Arc::new(class_name.to_string());
-            let signature = Arc::new(signature);
+
+            let id = Arc::new(method_id.clone());
             let code = Arc::new(ok_or!(
                 code,
                 "failed to resolve method {}, invalid code",
@@ -186,10 +207,10 @@ mod helper {
             ));
             let method = MethodBuilder::default()
                 .class_name(class_name)
-                .signature(signature)
                 .access_flags(*access_flags)
                 .is_native(is_native)
                 .name(name.clone())
+                .id(id)
                 .max_locals(ok_or!(
                     max_locals,
                     "failed to resolve method: {}, missing max locals",
@@ -211,7 +232,7 @@ mod helper {
                 .refection_ref(reflection_ref)
                 .build()?;
 
-            methods.insert(name, method);
+            methods.insert(method_id, method);
         }
         Ok(methods)
     }

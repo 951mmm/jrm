@@ -14,7 +14,7 @@ pub struct Method {
     #[getter(copy, rename = "is_native")]
     is_native: bool,
     name: String,
-    signature: Arc<MethodSignature>,
+    id: Arc<MethodId>,
 
     #[getter(copy)]
     max_locals: u16,
@@ -58,6 +58,7 @@ pub enum CatchType {
 /// 暂时支持向前看一位
 /// TODO parameters的预查。向前看n位
 /// 找到括号，然后过滤[Type::Void]
+#[derive(Clone, PartialEq, Eq, Hash)]
 pub struct MethodSignature {
     parameter_types: Vec<Type>,
     return_type: Type,
@@ -154,6 +155,17 @@ impl TryFrom<String> for MethodSignature {
         Ok(result)
     }
 }
+
+#[derive(Clone, PartialEq, Eq, Hash)]
+pub enum MethodId {
+    Polymorphic(MethodSignature),
+    Init(MethodSignature),
+    Common {
+        name: String,
+        signature: MethodSignature,
+    },
+}
+
 #[cfg(test)]
 mod test {
     use crate::Type;

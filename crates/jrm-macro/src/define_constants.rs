@@ -20,9 +20,8 @@ pub fn define_constants_inner(structs: &mut Vec<ItemStruct>) -> proc_macro2::Tok
          tag: u8
     );
     for item_struct in structs.iter_mut() {
-        item_struct.attrs.push(parse_quote!(
-            #[derive(Clone, Debug, ClassParser, Getter)]
-        ));
+        // item_struct.attrs.push(parse_quote!(
+        // ));
         if let Fields::Named(ref mut fields_named) = item_struct.fields {
             let mut new_named: Punctuated<Field, Token![,]> = Punctuated::new();
             new_named.push(prefix.clone());

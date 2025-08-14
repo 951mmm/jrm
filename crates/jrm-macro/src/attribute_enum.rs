@@ -1,6 +1,6 @@
 use quote::{format_ident, quote};
 
-use crate::{build_enum_input::Ast, generate_parse_cast_impl};
+use crate::build_enum_input::Ast;
 
 pub fn attribute_enum_inner(ast: &Ast) -> proc_macro2::TokenStream {
     let variants = ast.idents.iter().map(|ident| {
@@ -10,15 +10,12 @@ pub fn attribute_enum_inner(ast: &Ast) -> proc_macro2::TokenStream {
         }
     });
 
-    let parse_cast_impl = generate_parse_cast_impl("Attribute", &ast.idents, false);
-
     quote! {
-        #[derive(Debug, ClassParser)]
+        #[derive(Debug, ClassParser, ParseVariant)]
         #[class_parser(enum_entry(index(map = constant_pool[u16])))]
         pub enum Attribute {
             #(#variants),*
         }
-        #parse_cast_impl
     }
 }
 

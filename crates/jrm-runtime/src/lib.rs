@@ -1,8 +1,4 @@
-use std::{
-    iter::Peekable,
-    sync::PoisonError,
-};
-
+use std::{iter::Peekable, sync::PoisonError};
 
 use crate::{class::ClassBuilderError, method::MethodBuilderError};
 
@@ -60,7 +56,7 @@ pub type Result<T> = std::result::Result<T, Error>;
 
 /// Java类型
 /// 能和类型描述符相互转换
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Type {
     Boolean,
     Byte,
@@ -404,7 +400,7 @@ mod test {
     #[case("Z", Boolean, "renamed basic type")]
     fn test_type_try_from(#[case] input: &str, #[case] expected: Type, #[case] desc: &str) {
         let ty = Type::try_from(input.to_string()).unwrap();
-        assert_eq!(ty, expected, "bad case: {}", desc);
+        assert_eq!(ty, expected, "{desc}");
     }
 
     #[rstest]
@@ -415,7 +411,7 @@ mod test {
     #[case("Llang/some/$demo", "bad class name begin with `$`")]
     #[case("Llang/some/demo$;", "unexpected end")]
     fn test_invalid_descriptor(#[case] input: String, #[case] desc: &str) {
-        assert!(Type::try_from(input).is_err(), "bad case: {}", desc)
+        assert!(Type::try_from(input).is_err(), "{desc}")
     }
 
     #[rstest]

@@ -26,7 +26,6 @@ use macro_utils::unwrap_err;
 
 use crate::attribute_enum::attribute_enum_inner;
 use crate::base_attribute::base_attrubute_inner;
-use crate::build_enum_input::generate_parse_cast_impl;
 use crate::class_parser::derive_class_parser_inner;
 use crate::constant::constant_inner;
 use crate::constant_enum::constant_enum_inner;

@@ -1,30 +1,47 @@
-use quote::quote;
-use syn::{Fields, Ident, ItemStruct, parse::Parse, parse_quote};
 
-#[derive(Default)]
+use macro_utils::syn_err;
+use quote::quote;
+use syn::{
+    Fields, Ident, ItemStruct, Token, parse::Parse, parse_quote,
+};
+
 pub struct Attrs {
-    one_word: bool,
-    two_words: bool,
-    __ref: bool,
-    dynamic: bool,
-    module: bool,
+    constant_feature: ConstantFeature,
 }
+pub enum ConstantFeature {
+    OneWord,
+    TwoWord,
+    Ref,
+    Dynamic,
+    Module,
+}
+
+impl Parse for ConstantFeature {
+    fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
+        let ident: Ident = input.parse()?;
+        let result = match ident.to_string().as_str() {
+            "one_word" => Self::OneWord,
+            "two_words" => Self::TwoWord,
+            "__ref" => Self::Ref,
+            "dynamic" => Self::Dynamic,
+            "module" => Self::Module,
+            _ => {
+                syn_err!("invalid constant feature: {}", ident);
+            }
+        };
+        Ok(result)
+    }
+}
+
 impl Parse for Attrs {
     fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
-        let mut attr: Attrs = Default::default();
         let ident: Ident = input.parse()?;
-        match ident.to_string().as_str() {
-            "one_word" => attr.one_word = true,
-            "two_words" => attr.two_words = true,
-            "__ref" => attr.__ref = true,
-            "dynamic" => attr.dynamic = true,
-            "module" => attr.module = true,
-            _ => {}
+        if ident == "feature" {
+            input.parse::<Token![=]>()?;
+            let constant_feature: ConstantFeature = input.parse()?;
+            return Ok(Attrs { constant_feature });
         }
-        if !input.is_empty() {
-            return Err(input.error("invalid attr count"));
-        }
-        Ok(attr)
+        syn_err!("invalid attrs, expected `feature = ...`");
     }
 }
 pub fn constant_inner(attr: &Attrs, item_struct: &mut ItemStruct) -> proc_macro2::TokenStream {
@@ -43,27 +60,30 @@ pub fn constant_inner(attr: &Attrs, item_struct: &mut ItemStruct) -> proc_macro2
     ];
     let module_field = parse_quote!(pub name_index: u16);
     if let Fields::Named(ref mut fields_named) = item_struct.fields {
-        if attr.one_word {
-            fields_named.named.push(one_word_field);
-        }
-        if attr.two_words {
-            for two_words_field in two_words_fields {
-                fields_named.named.push(two_words_field);
+        let Attrs { constant_feature } = attr;
+        match constant_feature {
+            ConstantFeature::OneWord => {
+                fields_named.named.push(one_word_field);
             }
-        }
-        if attr.__ref {
-            for ref_field in ref_fields {
-                fields_named.named.push(ref_field);
+            ConstantFeature::TwoWord => {
+                for two_words_field in two_words_fields {
+                    fields_named.named.push(two_words_field);
+                }
             }
-        }
-        if attr.dynamic {
-            for dynamic_field in dynamic_fields {
-                fields_named.named.push(dynamic_field);
+            ConstantFeature::Ref => {
+                for ref_field in ref_fields {
+                    fields_named.named.push(ref_field);
+                }
             }
-        }
-        if attr.module {
-            fields_named.named.push(module_field);
-        }
+            ConstantFeature::Dynamic => {
+                for dynamic_field in dynamic_fields {
+                    fields_named.named.push(dynamic_field);
+                }
+            }
+            ConstantFeature::Module => {
+                fields_named.named.push(module_field);
+            }
+        };
     }
     quote! {
         #item_struct
@@ -128,3 +148,4 @@ mod tests {
         let _attrs: constant::Attrs = parse_quote!(module, __ref);
     }
 }
+

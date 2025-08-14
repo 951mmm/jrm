@@ -14,6 +14,7 @@ impl Parse for Ast {
 
 /// 为enum实现parse cast函数
 /// 每个parse函数返回[anyhow::Result]
+#[deprecated]
 pub fn generate_parse_cast_impl(
     enum_ident_lit: &str,
     idents: &Punctuated<Ident, Token![,]>,

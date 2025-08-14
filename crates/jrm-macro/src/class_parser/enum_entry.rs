@@ -128,12 +128,7 @@ mod tests {
         use macro_utils::FromAttrs;
 
         let output = EnumEntry::from_attrs(&[input])?;
-        assert_eq!(
-            format!("{:?}", output),
-            format!("{:?}", expected),
-            "bad case: {}",
-            desc
-        );
+        assert_eq!(format!("{:?}", output), format!("{:?}", expected), "{desc}",);
         Ok(())
     }
 
@@ -142,10 +137,6 @@ mod tests {
     #[case(parse_quote!(#[class_parser(enum_entry(index(map = map[u8], inner)))]), "second item is not `outer`")]
     #[case(parse_quote!(#[class_parser(enum_entry(index(map = map[u8], outer, other)))]), "more than 2 item")]
     fn test_invalid_attr_enum_entry(#[case] input: Attribute, #[case] desc: &str) {
-        assert!(
-            EnumEntry::from_attrs(&[input]).is_err(),
-            "bad case: {}",
-            desc
-        );
+        assert!(EnumEntry::from_attrs(&[input]).is_err(), "{desc}");
     }
 }

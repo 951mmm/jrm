@@ -1,6 +1,6 @@
 use quote::{format_ident, quote};
 
-use crate::build_enum_input::{self, generate_parse_cast_impl};
+use crate::build_enum_input;
 
 pub fn constant_enum_inner(ast: &build_enum_input::Ast) -> proc_macro2::TokenStream {
     let variants = ast.idents.iter().map(|ident| {
@@ -8,17 +8,13 @@ pub fn constant_enum_inner(ast: &build_enum_input::Ast) -> proc_macro2::TokenStr
         quote! {#ident(#constant_ident)}
     });
 
-    let parse_cast_impl = generate_parse_cast_impl("Constant", &ast.idents, true);
-
     quote! {
-        #[derive(Clone, Debug, ClassParser)]
+        #[derive(Clone, Debug, ClassParser, ParseVariant)]
         #[class_parser(enum_entry(index(map = constant_tag_map[u8])))]
         pub enum Constant {
             #(#variants,)*
             Invalid
         }
-
-        #parse_cast_impl
     }
 }
 

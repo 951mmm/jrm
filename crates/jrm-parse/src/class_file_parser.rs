@@ -70,7 +70,29 @@ impl ParserContext {
             19 => "Module",
             20 => "Package",
         };
-        let element_value_map = hashmap! {};
+        let mut element_value_map = hashmap! {};
+        let keys = [
+            'B', 'C', 'D', 'F', 'I', 'J', 'S', 'Z', 's', 'e', 'c', '@', '[',
+        ];
+
+        let values = [
+            vec!["ConstValueIndex"; 9].as_slice(),
+            &[
+                "EnumConstValue",
+                "ClassInfoIndex",
+                "AnnotationValue",
+                "ArrayValue",
+            ],
+        ]
+        .concat();
+
+        keys.iter()
+            .map(|&c| c as u8)
+            .zip(values)
+            .for_each(|(key, value)| {
+                let _ = element_value_map.insert(key, value);
+            });
+
         Self {
             class_reader,
             count: Default::default(),
