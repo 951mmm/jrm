@@ -8,12 +8,31 @@ pub use constant_pool::*;
 
 #[cfg(test)]
 mod tests {
-    use std::{env, error::Error, fs, path::PathBuf};
+    use std::{
+        env,
+        error::Error,
+        fs,
+        path::{Path, PathBuf},
+    };
 
     use dotenvy::dotenv;
     use rstest::rstest;
+    use rust_embed::RustEmbed;
 
     use crate::instance_klass::InstanceKlass;
+
+    #[derive(RustEmbed)]
+    #[folder = "../../asset"]
+    struct Asset;
+
+    impl Asset {
+        pub fn get_class_bytes(file_name: &str) -> Vec<u8> {
+            let msg = &format!("{} not found", file_name);
+            let file = Asset::get(&format!("{}.class", file_name)).expect(msg);
+            let byte = file.data;
+            byte.to_vec()
+        }
+    }
 
     #[rstest]
     #[case("Simple1Impl", "simple class impl runnable")]
@@ -21,10 +40,7 @@ mod tests {
     fn test_parser(#[case] file_name: &str, #[case] desc: &str) {
         dotenv().ok();
         let closure = || -> Result<(), Box<dyn Error>> {
-            let dir_path = env::var("JAVA_CLASS_DIR_PATH")?;
-            let class_file_path = PathBuf::from(dir_path).join(format!("{}.class", file_name));
-            println!("path is: {}", class_file_path.display());
-            let bytes = fs::read(class_file_path)?;
+            let bytes = Asset::get_class_bytes(file_name);
             let instance_klass = InstanceKlass::parse_from_bytes(bytes)?;
             println!("instance_klass is: {:?}", instance_klass);
             Ok(())
